@@ -5,13 +5,13 @@ import { getDatabase } from 'firebase/database';
 
 // Hardcoded Firebase configuration to ensure it works
 const firebaseConfig = {
-  apiKey: "AIzaSyCHjrxnLMy9ogTsgzrqXwhdCXcTLAGkbxk",
+  apiKey: "AIzaSyAuZqFvaul-SfdZEnceu5DCqfA_zERu340",
   authDomain: "dikit-math.firebaseapp.com",
   projectId: "dikit-math",
-  storageBucket: "dikit-math.appspot.com",
-  messagingSenderId: "748419833338",
-  appId: "1:748419833338:web:e24cc9a9ab13f22e8b6f5d",
-  databaseURL: "https://dikit-math-default-rtdb.asia-southeast1.firebasedatabase.app"
+  storageBucket: "dikit-math.firebasestorage.app",
+  messagingSenderId: "601886976432",
+  appId: "1:601886976432:web:5c9cba685e137746d64e75",
+  measurementId: "G-RF5FCB6YZZ"
 };
 
 console.log("=== KONFIGURASI FIREBASE ===");
