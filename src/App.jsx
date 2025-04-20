@@ -9,6 +9,9 @@ import { loadingAnimation } from './animations/mathAnimations';
 import TestPage from './pages/TestPage';
 import ErrorBoundary from './components/ErrorBoundary';
 
+// Import AuthProvider
+import { AuthProvider, useAuth } from './context/AuthContext';
+
 // Lazy loading para todos los componentes de página
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Materi = lazy(() => import('./pages/Materi'));
@@ -41,8 +44,13 @@ const OptimizedLoading = () => (
 
 // HomeRedirect component to handle root path routing
 const HomeRedirect = () => {
-  const token = localStorage.getItem('token');
-  return token ? <Navigate to="/dashboard" replace /> : <Navigate to="/login" replace />;
+  const { user, loading } = useAuth();
+  
+  if (loading) {
+    return <OptimizedLoading />;
+  }
+  
+  return user ? <Navigate to="/dashboard" replace /> : <Navigate to="/login" replace />;
 };
 
 function App() {
@@ -70,49 +78,51 @@ function App() {
   }, []);
 
   return (
-    <Router>
-      <Navbar />
-      <Suspense fallback={<OptimizedLoading />}>
-        <PageTransition transitionType="fade" duration={300}>
-          <Routes>
-            {/* Test Route (public) */}
-            <Route path="/test" element={<TestPage />} />
-          
-            {/* Protected Routes */}
-            <Route path="/dashboard" element={
-              <ProtectedRoute>
-                <ErrorBoundary>
-                  <Dashboard />
-                </ErrorBoundary>
-              </ProtectedRoute>
-            } />
-            <Route path="/materi" element={<ProtectedRoute><Materi /></ProtectedRoute>} />
-            <Route path="/materi/:category/:topic" element={<ProtectedRoute><MateriTopic /></ProtectedRoute>} />
-            <Route path="/soal" element={<ProtectedRoute><Soal /></ProtectedRoute>} />
-            <Route path="/soal/:category/:topic" element={<ProtectedRoute><SoalTopic /></ProtectedRoute>} />
-            <Route path="/leaderboard" element={<ProtectedRoute><Leaderboard /></ProtectedRoute>} />
-            <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
-            <Route path="/flashcard" element={<ProtectedRoute><Flashcard /></ProtectedRoute>} />
-            <Route path="/flashcard/:category/:topic" element={<ProtectedRoute><FlashcardTopic /></ProtectedRoute>} />
-            <Route path="/aktivitas" element={<ProtectedRoute><Activity /></ProtectedRoute>} />
-            <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+    <AuthProvider>
+      <Router>
+        <Navbar />
+        <Suspense fallback={<OptimizedLoading />}>
+          <PageTransition transitionType="fade" duration={300}>
+            <Routes>
+              {/* Test Route (public) */}
+              <Route path="/test" element={<TestPage />} />
             
-            {/* GeoGebra Tools Routes */}
-            <Route path="/tools/classic" element={<ProtectedRoute><GeoGebraClassic /></ProtectedRoute>} />
-            <Route path="/tools/calculator" element={<ProtectedRoute><GraphCalculator /></ProtectedRoute>} />
-            <Route path="/tools/geometry" element={<ProtectedRoute><GeometryApp /></ProtectedRoute>} />
-            
-            {/* Public Routes */}
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/" element={<HomeRedirect />} />
-            
-            {/* 404 Route */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </PageTransition>
-      </Suspense>
-    </Router>
+              {/* Protected Routes */}
+              <Route path="/dashboard" element={
+                <ProtectedRoute>
+                  <ErrorBoundary>
+                    <Dashboard />
+                  </ErrorBoundary>
+                </ProtectedRoute>
+              } />
+              <Route path="/materi" element={<ProtectedRoute><Materi /></ProtectedRoute>} />
+              <Route path="/materi/:category/:topic" element={<ProtectedRoute><MateriTopic /></ProtectedRoute>} />
+              <Route path="/soal" element={<ProtectedRoute><Soal /></ProtectedRoute>} />
+              <Route path="/soal/:category/:topic" element={<ProtectedRoute><SoalTopic /></ProtectedRoute>} />
+              <Route path="/leaderboard" element={<ProtectedRoute><Leaderboard /></ProtectedRoute>} />
+              <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
+              <Route path="/flashcard" element={<ProtectedRoute><Flashcard /></ProtectedRoute>} />
+              <Route path="/flashcard/:category/:topic" element={<ProtectedRoute><FlashcardTopic /></ProtectedRoute>} />
+              <Route path="/aktivitas" element={<ProtectedRoute><Activity /></ProtectedRoute>} />
+              <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+              
+              {/* GeoGebra Tools Routes */}
+              <Route path="/tools/classic" element={<ProtectedRoute><GeoGebraClassic /></ProtectedRoute>} />
+              <Route path="/tools/calculator" element={<ProtectedRoute><GraphCalculator /></ProtectedRoute>} />
+              <Route path="/tools/geometry" element={<ProtectedRoute><GeometryApp /></ProtectedRoute>} />
+              
+              {/* Public Routes */}
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+              <Route path="/" element={<HomeRedirect />} />
+              
+              {/* 404 Route */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </PageTransition>
+        </Suspense>
+      </Router>
+    </AuthProvider>
   );
 }
 

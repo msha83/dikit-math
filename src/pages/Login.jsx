@@ -1,49 +1,43 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { 
-  signInWithEmailAndPassword,
-  onAuthStateChanged
-} from 'firebase/auth';
-import { ref, get, set } from 'firebase/database';
 import '../styles/Login.css';
 
-// Import Firebase from centralized configuration
-import firebaseApp, { auth, database } from '../config/firebase';
+// Import Auth Context hook
+import { useAuth } from '../context/AuthContext';
+
+// Import Supabase client for profiles table operations
+import { supabase } from '../config/supabase';
 
 // Using absolute path for logo
 const logoPath = '/logo.png';
 
 const Login = () => {
   const navigate = useNavigate();
+  const { signIn, user, loading: authLoading } = useAuth();
   const [formData, setFormData] = useState({
     email: '',
     password: ''
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [firebaseInitialized, setFirebaseInitialized] = useState(false);
   const [initialChecking, setInitialChecking] = useState(true);
 
   useEffect(() => {
-    // Check if Firebase is properly initialized
-    if (firebaseApp) {
-      setFirebaseInitialized(true);
+    // Check if user is already logged in
+    if (user) {
+      // Get user profile from localStorage or fetch it
+      const userProfile = JSON.parse(localStorage.getItem('user')) || {};
       
-      // Check if user is already logged in
-      const unsubscribe = onAuthStateChanged(auth, (user) => {
-        if (user) {
-          // User is already signed in, redirect to dashboard
-          navigate('/dashboard');
-        }
-        setInitialChecking(false);
-      });
-      
-      return () => unsubscribe();
-    } else {
-      setError('Firebase tidak terinitialisasi dengan benar. Harap refresh halaman atau hubungi administrator.');
-      setInitialChecking(false);
+      // Redirect based on onboarding status
+      if (userProfile.onboarded) {
+        navigate('/dashboard');
+      } else {
+        navigate('/onboarding');
+      }
     }
-  }, [navigate]);
+    
+    setInitialChecking(false);
+  }, [user, navigate]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -69,90 +63,62 @@ const Login = () => {
       return;
     }
 
-    if (!firebaseInitialized) {
-      setError('Firebase tidak terinitialisasi dengan benar. Harap refresh halaman atau hubungi administrator.');
-      setLoading(false);
-      return;
-    }
-
     try {
       console.log("Mencoba login dengan email:", email);
-      // Attempt to sign in with Firebase
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
+      // Attempt to sign in with AuthContext
+      const data = await signIn(email, password);
       
-      console.log("Login berhasil, mendapatkan data user dari database");
-      // Get user data from Firebase
-      const userRef = ref(database, `users/${user.uid}`);
-      
-      try {
-        const userSnapshot = await get(userRef);
+      if (data?.user) {
+        console.log("Login berhasil, mengambil data user");
         
-        if (userSnapshot.exists()) {
-          const userData = userSnapshot.val();
+        // Check if we already have profile data in the session
+        const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', data.user.id)
+          .single();
           
-          // Store user data and generate token in localStorage
-          localStorage.setItem('token', user.accessToken);
-          localStorage.setItem('userId', user.uid);
-          localStorage.setItem('user', JSON.stringify({
-            id: user.uid,
-            name: userData.name || '',
-            email: user.email,
-            onboarded: userData.onboarded || false
-          }));
-          
-          // Check if user has completed onboarding
-          if (userData.onboarded) {
-            navigate('/dashboard');
-          } else {
-            navigate('/onboarding');
-          }
+        if (profileError && profileError.code !== 'PGRST116') {
+          console.error('Profile fetch error:', profileError);
+          throw new Error('Gagal mengambil data profil');
+        }
+        
+        // Store user data in localStorage
+        localStorage.setItem('token', data.session.access_token);
+        localStorage.setItem('userId', data.user.id);
+        
+        const userData = {
+          id: data.user.id,
+          name: profileData?.name || data.user.user_metadata?.full_name || '',
+          email: data.user.email,
+          onboarded: profileData?.onboarded || false
+        };
+        
+        localStorage.setItem('user', JSON.stringify(userData));
+        
+        // Check if user has completed onboarding
+        if (userData.onboarded) {
+          navigate('/dashboard');
         } else {
-          // User exists in authentication but not in database
-          localStorage.setItem('token', user.accessToken);
-          localStorage.setItem('userId', user.uid);
-          localStorage.setItem('user', JSON.stringify({
-            id: user.uid,
-            name: '',
-            email: user.email,
-            onboarded: false
-          }));
           navigate('/onboarding');
         }
-      } catch (dbError) {
-        console.error('Database error:', dbError);
-        setError('Gagal mengambil data pengguna. Silakan coba lagi.');
       }
     } catch (error) {
       console.error('Login error:', error);
-      console.error('Error code:', error.code);
-      console.error('Error message:', error.message);
       
-      // Handle specific Firebase auth errors
-      switch (error.code) {
-        case 'auth/user-not-found':
-          setError('Email tidak terdaftar. Silakan daftar terlebih dahulu.');
-          break;
-        case 'auth/wrong-password':
-          setError('Password salah. Silakan coba lagi.');
-          break;
-        case 'auth/invalid-email':
-          setError('Format email tidak valid.');
-          break;
-        case 'auth/invalid-credential':
-          setError('Email atau password salah. Silakan coba lagi.');
-          break;
-        case 'auth/too-many-requests':
-          setError('Terlalu banyak percobaan login. Silakan coba lagi nanti.');
-          break;
-        case 'auth/network-request-failed':
-          setError('Gagal terhubung ke server. Periksa koneksi internet Anda.');
-          break;
-        case 'auth/api-key-not-valid':
-          setError('Konfigurasi API tidak valid. Silakan hubungi administrator.');
-          break;
-        default:
-          setError(`Terjadi kesalahan (${error.code}). Silakan coba lagi nanti.`);
+      // Handle specific Supabase auth errors
+      const errorMessage = error.message || error.toString();
+      
+      if (errorMessage.includes('Invalid login credentials')) {
+        setError('Email atau password salah. Silakan coba lagi.');
+      } else if (errorMessage.includes('Email not confirmed')) {
+        setError('Email belum dikonfirmasi. Silakan periksa email Anda.');
+      } else if (errorMessage.includes('Too many requests')) {
+        setError('Terlalu banyak percobaan login. Silakan coba lagi nanti.');
+      } else if (errorMessage.includes('network')) {
+        setError('Gagal terhubung ke server. Periksa koneksi internet Anda.');
+      } else {
+        setError(`Terjadi kesalahan. Silakan coba lagi nanti.`);
       }
     } finally {
       setLoading(false);
@@ -160,7 +126,7 @@ const Login = () => {
   };
 
   // Render skeleton loading during initial auth check
-  if (initialChecking) {
+  if (initialChecking || authLoading) {
     return (
       <div className="login-container">
         <div className="login-form-container skeleton-container">
@@ -229,16 +195,10 @@ const Login = () => {
           <button 
             type="submit" 
             className="login-button"
-            disabled={loading || !firebaseInitialized}
+            disabled={loading}
           >
             {loading ? 'Memproses...' : 'Masuk'}
           </button>
-          
-          {!firebaseInitialized && (
-            <div className="firebase-error-message">
-              Firebase tidak terinitialisasi dengan benar. Silakan refresh halaman atau periksa koneksi internet Anda.
-            </div>
-          )}
 
           <div className="login-links">
             <p>

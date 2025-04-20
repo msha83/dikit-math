@@ -8,6 +8,7 @@
     "@emotion/styled": "^11.11.0",
     "@mui/icons-material": "^5.15.14",
     "@mui/material": "^5.15.14",
+    "@supabase/supabase-js": "^2.49.4",
     "@vitejs/plugin-react": "^4.4.0",
     "axios": "^1.6.2",
     "firebase": "^10.7.1",
