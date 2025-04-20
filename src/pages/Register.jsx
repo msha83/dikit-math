@@ -1,20 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ref, set } from 'firebase/database';
-import { 
-  createUserWithEmailAndPassword,
-  updateProfile,
-  onAuthStateChanged
-} from 'firebase/auth';
 
-// Import Firebase configuration
-import { auth, database, firebaseApp } from '../config/firebase';
+// Import Auth Context hook
+import { useAuth } from '../context/AuthContext';
+
+// Import Supabase client for profiles table operations
+import { supabase } from '../config/supabase';
 
 // Add import for CSS if needed
 import '../styles/Login.css';
 
 const Register = () => {
   const navigate = useNavigate();
+  const { signUp, user, loading: authLoading } = useAuth();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -23,25 +21,16 @@ const Register = () => {
   });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [firebaseInitialized, setFirebaseInitialized] = useState(false);
+  const [initialChecking, setInitialChecking] = useState(true);
 
   useEffect(() => {
-    // Check if Firebase is properly initialized
-    if (firebaseApp) {
-      setFirebaseInitialized(true);
-      
-      // Check if user is already logged in
-      const unsubscribe = onAuthStateChanged(auth, (user) => {
-        if (user) {
-          navigate('/dashboard');
-        }
-      });
-      
-      return () => unsubscribe();
-    } else {
-      setError('Firebase tidak terinitialisasi dengan benar. Harap refresh halaman atau hubungi administrator.');
+    // Check if user is already logged in
+    if (user) {
+      navigate('/dashboard');
     }
-  }, [navigate]);
+    
+    setInitialChecking(false);
+  }, [user, navigate]);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -55,13 +44,6 @@ const Register = () => {
     setError('');
 
     console.log("Proses registrasi dimulai...");
-    
-    // Check if Firebase is initialized
-    if (!firebaseInitialized) {
-      setError('Firebase tidak terinitialisasi dengan benar. Harap refresh halaman atau hubungi administrator.');
-      setIsLoading(false);
-      return;
-    }
 
     // Validasi input
     if (!formData.name || !formData.email || !formData.password || !formData.confirmPassword) {
@@ -83,107 +65,107 @@ const Register = () => {
     }
 
     try {
-      console.log("Mencoba membuat akun dengan Firebase...");
-      console.log("Auth objek tersedia:", !!auth);
+      console.log("Mencoba membuat akun dengan AuthContext...");
       
-      // Create user with Firebase Authentication
-      const userCredential = await createUserWithEmailAndPassword(
-        auth,
-        formData.email,
-        formData.password
-      );
+      // Create user with AuthContext
+      const data = await signUp(formData.email, formData.password, formData.name);
       
-      console.log("Akun berhasil dibuat:", userCredential);
-      const user = userCredential.user;
+      console.log("Akun berhasil dibuat:", data);
       
-      // Update the user profile with the provided name
-      console.log("Memperbarui profil dengan nama...");
-      await updateProfile(user, {
-        displayName: formData.name
-      });
-      
-      // Save user to Firebase database
-      console.log("Menyimpan data pengguna ke database...");
-      const userRef = ref(database, `users/${user.uid}`);
-      await set(userRef, {
-        id: user.uid,
-        username: formData.name,
-        email: formData.email,
-        score: 0,
-        createdAt: user.metadata.creationTime || new Date().toISOString(),
-        lastUpdated: new Date().toISOString()
-      });
+      if (data?.user) {
+        // Store initial user progress
+        console.log("Menyimpan progres awal pengguna...");
+        const initialUserProgress = {
+          completedTopics: 0,
+          totalTopics: 12,
+          dailyStreak: 1,
+          xpPoints: 50, // Starting XP
+          rank: 'Pemula',
+          nextMilestone: 200
+        };
+        localStorage.setItem('userProgress', JSON.stringify(initialUserProgress));
 
-      // Store default user progress
-      console.log("Menyimpan progres awal pengguna...");
-      const initialUserProgress = {
-        completedTopics: 0,
-        totalTopics: 12,
-        dailyStreak: 1,
-        xpPoints: 50, // Starting XP
-        rank: 'Pemula',
-        nextMilestone: 200
-      };
-      localStorage.setItem('userProgress', JSON.stringify(initialUserProgress));
+        // Insert user profile into profiles table
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .insert([
+            {
+              id: data.user.id,
+              name: formData.name,
+              email: formData.email,
+              score: 0,
+              created_at: new Date().toISOString(),
+              last_updated: new Date().toISOString()
+            }
+          ]);
 
-      // Store user data in localStorage
-      console.log("Menyimpan data pengguna di localStorage...");
-      localStorage.setItem('user', JSON.stringify({
-        id: user.uid,
-        email: formData.email,
-        name: formData.name
-      }));
-      
-      // Store token and userId in localStorage (important for authentication)
-      localStorage.setItem('token', user.accessToken);
-      localStorage.setItem('userId', user.uid);
+        if (profileError) {
+          console.error('Error creating profile:', profileError);
+          throw new Error('Gagal membuat profil pengguna');
+        }
 
-      console.log("Registrasi berhasil, mengarahkan ke dashboard...");
-      setFormData({ name: '', email: '', password: '', confirmPassword: '' });
-      setIsLoading(false);
-      navigate('/dashboard');
+        // Store user data in localStorage
+        console.log("Menyimpan data pengguna di localStorage...");
+        localStorage.setItem('user', JSON.stringify({
+          id: data.user.id,
+          email: formData.email,
+          name: formData.name
+        }));
+        
+        // Store token and userId in localStorage
+        if (data.session) {
+          localStorage.setItem('token', data.session.access_token);
+          localStorage.setItem('userId', data.user.id);
+        }
+
+        console.log("Registrasi berhasil, mengarahkan ke onboarding...");
+        setFormData({ name: '', email: '', password: '', confirmPassword: '' });
+        setIsLoading(false);
+        navigate('/onboarding');
+      }
     } catch (error) {
-      console.error('Firebase Auth Error:', error);
-      console.error('Error code:', error.code);
-      console.error('Error message:', error.message);
+      console.error('Auth Error:', error);
       
       let errorMessage = 'Terjadi kesalahan saat pendaftaran. Silakan coba lagi.';
       
-      // Map Firebase auth errors to user-friendly messages
-      switch (error.code) {
-        case 'auth/email-already-in-use':
-          errorMessage = 'Email sudah terdaftar. Silakan gunakan email lain.';
-          break;
-        case 'auth/invalid-email':
-          errorMessage = 'Format email tidak valid.';
-          break;
-        case 'auth/operation-not-allowed':
-          errorMessage = 'Operasi tidak diperbolehkan.';
-          break;
-        case 'auth/weak-password':
-          errorMessage = 'Password terlalu lemah. Gunakan kombinasi huruf, angka, dan simbol.';
-          break;
-        case 'auth/network-request-failed':
-          errorMessage = 'Koneksi internet bermasalah. Periksa koneksi internet Anda.';
-          break;
-        case 'auth/invalid-api-key':
-        case 'auth/api-key-not-valid':
-          errorMessage = 'Konfigurasi API tidak valid. Silakan hubungi administrator.';
-          break;
-        case 'auth/app-deleted':
-          errorMessage = 'Aplikasi Firebase tidak tersedia. Silakan hubungi administrator.';
-          break;
-        case 'auth/argument-error':
-          errorMessage = 'Terjadi kesalahan validasi input. Periksa kembali data yang dimasukkan.';
-          break;
-        default:
-          errorMessage = `Terjadi kesalahan saat pendaftaran (${error.code}): ${error.message}`;
+      // Map auth errors to user-friendly messages
+      if (error.message.includes('email already in use') || error.message.includes('already registered')) {
+        errorMessage = 'Email sudah terdaftar. Silakan gunakan email lain.';
+      } else if (error.message.includes('invalid email')) {
+        errorMessage = 'Format email tidak valid.';
+      } else if (error.message.includes('weak password')) {
+        errorMessage = 'Password terlalu lemah. Gunakan kombinasi huruf, angka, dan simbol.';
+      } else if (error.message.includes('network')) {
+        errorMessage = 'Koneksi internet bermasalah. Periksa koneksi internet Anda.';
       }
       
       setError(errorMessage);
       setIsLoading(false);
     }
   };
+
+  // Render skeleton loading during initial auth check
+  if (initialChecking || authLoading) {
+    return (
+      <div className="flex min-h-screen bg-gray-50">
+        <div className="flex flex-1 flex-col justify-center py-12 px-4 sm:px-6 lg:flex-none lg:px-20 xl:px-24">
+          <div className="mx-auto w-full max-w-sm lg:w-96">
+            <div className="skeleton-logo"></div>
+            <div className="skeleton-text"></div>
+            <div className="mt-8">
+              <div className="skeleton-form">
+                <div className="skeleton-input"></div>
+                <div className="skeleton-input"></div>
+                <div className="skeleton-input"></div>
+                <div className="skeleton-input"></div>
+                <div className="skeleton-button"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen bg-gray-50">
@@ -292,8 +274,8 @@ const Register = () => {
                 <div>
                   <button
                     type="submit"
-                    disabled={isLoading || !firebaseInitialized}
-                    className="flex w-full justify-center rounded-md border border-transparent bg-blue-600 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-75"
+                    disabled={isLoading}
+                    className="flex w-full justify-center rounded-md border border-transparent bg-blue-600 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                   >
                     {isLoading ? 'Memproses...' : 'Daftar'}
                   </button>
@@ -303,11 +285,40 @@ const Register = () => {
           </div>
         </div>
       </div>
-      <div className="relative hidden w-0 flex-1 lg:block">
-        <div className="absolute inset-0 h-full w-full bg-gradient-to-r from-blue-800 to-blue-600 flex items-center justify-center">
-          <div className="px-8 text-center text-white">
-            <h2 className="text-4xl font-bold mb-4">Bergabunglah dengan Komunitas Belajar Kami</h2>
-            <p className="text-xl">Tingkatkan kemampuan matematika Anda melalui metode belajar yang menyenangkan</p>
+      
+      <div className="hidden lg:block relative w-0 flex-1">
+        <div className="absolute inset-0 bg-gradient-to-r from-blue-800 to-indigo-700">
+          <div className="flex flex-col justify-center items-center h-full text-white px-12">
+            <h1 className="text-4xl font-bold mb-6">Mulai Perjalanan Belajar Matematika Anda</h1>
+            <p className="text-xl mb-8">
+              Platform pembelajaran interaktif yang membantu Anda memahami konsep matematika dengan lebih mudah dan menyenangkan
+            </p>
+            
+            <div className="grid grid-cols-2 gap-6 w-full max-w-2xl">
+              <div className="bg-white bg-opacity-10 p-6 rounded-lg">
+                <div className="text-3xl mb-2">🚀</div>
+                <h3 className="text-xl font-semibold mb-2">Pembelajaran Adaptif</h3>
+                <p>Materi dan latihan yang disesuaikan dengan kemampuan Anda</p>
+              </div>
+              
+              <div className="bg-white bg-opacity-10 p-6 rounded-lg">
+                <div className="text-3xl mb-2">🏆</div>
+                <h3 className="text-xl font-semibold mb-2">Gamifikasi</h3>
+                <p>Dapatkan poin, lencana, dan naik level dengan menyelesaikan tantangan</p>
+              </div>
+              
+              <div className="bg-white bg-opacity-10 p-6 rounded-lg">
+                <div className="text-3xl mb-2">📊</div>
+                <h3 className="text-xl font-semibold mb-2">Analisis Performa</h3>
+                <p>Pantau kemajuan dan identifikasi area yang perlu ditingkatkan</p>
+              </div>
+              
+              <div className="bg-white bg-opacity-10 p-6 rounded-lg">
+                <div className="text-3xl mb-2">🔍</div>
+                <h3 className="text-xl font-semibold mb-2">Pemahaman Mendalam</h3>
+                <p>Visualisasi dan penjelasan interaktif untuk konsep-konsep kompleks</p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
