@@ -1,42 +1,18 @@
 import React, { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
-import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, onValue, set, get, query, limitToLast, orderByChild } from 'firebase/database';
-
-// Firebase configuration
-const firebaseConfig = {
-  apiKey: "AIzaSyA_w7oAXXQVCfWuWXSiG9j2wI6o0GGmwjM",
-  authDomain: "mathedu-leaderboard.firebaseapp.com",
-  projectId: "mathedu-leaderboard",
-  storageBucket: "mathedu-leaderboard.appspot.com",
-  messagingSenderId: "485273185384",
-  appId: "1:485273185384:web:ebc257b3adb7b7a70fd5c2",
-  databaseURL: "https://mathedu-leaderboard-default-rtdb.asia-southeast1.firebasedatabase.app"
-};
-
-// Initialize Firebase - with error handling (only once)
-let app;
-let database;
-try {
-  if (!app) {
-    app = initializeApp(firebaseConfig);
-    database = getDatabase(app);
-  }
-} catch (error) {
-  console.warn('Firebase initialization failed:', error);
-}
+import { supabase } from '../config/supabase';
 
 // Fallback/sample leaderboard data
 const sampleLeaderboardData = [
-  { _id: '1', username: 'SiAhli123', score: 1250, rank: 1 },
-  { _id: '2', username: 'MathWizard', score: 1100, rank: 2 },
-  { _id: '3', username: 'BrilliantMind', score: 950, rank: 3 },
-  { _id: '4', username: 'PecintaAljabar', score: 820, rank: 4 },
-  { _id: '5', username: 'KalkulusKing', score: 780, rank: 5 },
-  { _id: '6', username: 'GeometriGuru', score: 740, rank: 6 },
-  { _id: '7', username: 'TrigonometriPro', score: 690, rank: 7 },
-  { _id: '8', username: 'AlgoritmaMaster', score: 650, rank: 8 },
-  { _id: '9', username: 'StatistikStar', score: 620, rank: 9 },
-  { _id: '10', username: 'ProbabilitasPrima', score: 590, rank: 10 },
+  { id: '1', username: 'SiAhli123', score: 1250, rank: 1 },
+  { id: '2', username: 'MathWizard', score: 1100, rank: 2 },
+  { id: '3', username: 'BrilliantMind', score: 950, rank: 3 },
+  { id: '4', username: 'PecintaAljabar', score: 820, rank: 4 },
+  { id: '5', username: 'KalkulusKing', score: 780, rank: 5 },
+  { id: '6', username: 'GeometriGuru', score: 740, rank: 6 },
+  { id: '7', username: 'TrigonometriPro', score: 690, rank: 7 },
+  { id: '8', username: 'AlgoritmaMaster', score: 650, rank: 8 },
+  { id: '9', username: 'StatistikStar', score: 620, rank: 9 },
+  { id: '10', username: 'ProbabilitasPrima', score: 590, rank: 10 },
 ];
 
 // User row component to optimize rendering
@@ -103,13 +79,8 @@ const Leaderboard = () => {
   const [totalUsers, setTotalUsers] = useState(0);
   const usersPerPage = 20;
 
-  // Function to sync local user progress with Firebase - optimized with useCallback
-  const syncUserProgressToFirebase = useCallback(async () => {
-    if (!database) {
-      console.warn('Firebase database not available. Using sample data.');
-      return;
-    }
-    
+  // Function to sync local user progress with Supabase
+  const syncUserProgressToSupabase = useCallback(async () => {
     try {
       // Get current user
       const currentUserData = JSON.parse(localStorage.getItem('user') || '{}');
@@ -118,25 +89,53 @@ const Leaderboard = () => {
       // Get user progress from localStorage
       const userProgressData = JSON.parse(localStorage.getItem('userProgress') || '{}');
       
-      // Create or update user in Firebase
-      const userRef = ref(database, `users/${currentUserData.id}`);
-      const userSnapshot = await get(userRef);
+      // Check if user exists in leaderboard
+      const { data: existingUser, error: checkError } = await supabase
+        .from('leaderboard')
+        .select('*')
+        .eq('user_id', currentUserData.id)
+        .single();
+        
+      if (checkError && checkError.code !== 'PGRST116') {
+        console.error('Error checking leaderboard entry:', checkError);
+        return;
+      }
       
-      // Update user data
-      set(userRef, {
-        id: currentUserData.id,
-        username: currentUserData.name || (currentUserData.email && currentUserData.email.split('@')[0]) || 'User',
-        email: currentUserData.email || '',
-        score: userProgressData.xpPoints || 0,
-        lastUpdated: new Date().toISOString()
-      });
+      if (existingUser) {
+        // Update existing entry
+        const { error: updateError } = await supabase
+          .from('leaderboard')
+          .update({
+            username: currentUserData.name || (currentUserData.email && currentUserData.email.split('@')[0]) || 'User',
+            score: userProgressData.xpPoints || 0,
+            last_updated: new Date().toISOString()
+          })
+          .eq('user_id', currentUserData.id);
+          
+        if (updateError) {
+          console.error('Error updating leaderboard:', updateError);
+        }
+      } else {
+        // Create new entry
+        const { error: insertError } = await supabase
+          .from('leaderboard')
+          .insert([{
+            user_id: currentUserData.id,
+            username: currentUserData.name || (currentUserData.email && currentUserData.email.split('@')[0]) || 'User',
+            score: userProgressData.xpPoints || 0,
+            last_updated: new Date().toISOString()
+          }]);
+          
+        if (insertError) {
+          console.error('Error creating leaderboard entry:', insertError);
+        }
+      }
     } catch (error) {
-      console.error('Error syncing user to Firebase:', error);
-      // Continue without Firebase sync
+      console.error('Error syncing user to Supabase:', error);
     }
   }, []);
 
-  // Function to add the current user to sample data if needed - optimized with useCallback
+  // Function to add the current user to sample data if needed
   const addCurrentUserToSampleData = useCallback(() => {
     try {
       // Get current user
@@ -147,12 +146,12 @@ const Leaderboard = () => {
       const userProgressData = JSON.parse(localStorage.getItem('userProgress') || '{}');
       
       // Check if user already exists in sample data
-      const userExists = sampleLeaderboardData.some(user => user._id === currentUserData.id);
+      const userExists = sampleLeaderboardData.some(user => user.id === currentUserData.id);
       
       if (userExists) {
         // Just update score
         return sampleLeaderboardData.map(user => {
-          if (user._id === currentUserData.id) {
+          if (user.id === currentUserData.id) {
             return {
               ...user,
               username: currentUserData.name || (currentUserData.email && currentUserData.email.split('@')[0]) || 'User',
@@ -167,7 +166,7 @@ const Leaderboard = () => {
         const updatedData = [
           ...sampleLeaderboardData,
           {
-            _id: currentUserData.id,
+            id: currentUserData.id,
             username: currentUserData.name || (currentUserData.email && currentUserData.email.split('@')[0]) || 'User',
             score: userProgressData.xpPoints || 0
           }
@@ -182,7 +181,7 @@ const Leaderboard = () => {
     }
   }, []);
 
-  // Function to add random XP to current user (for testing) - optimized with useCallback
+  // Function to add random XP to current user (for testing)
   const addRandomXp = useCallback(async () => {
     if (!currentUser || !currentUser.id) return;
     
@@ -198,27 +197,25 @@ const Leaderboard = () => {
       userProgress.xpPoints = newXpPoints;
       localStorage.setItem('userProgress', JSON.stringify(userProgress));
       
-      // Update Firebase
-      if (database) {
-        const userRef = ref(database, `users/${currentUser.id}`);
-        const userSnapshot = await get(userRef);
+      // Update Supabase
+      const { error } = await supabase
+        .from('leaderboard')
+        .update({
+          score: newXpPoints,
+          last_updated: new Date().toISOString()
+        })
+        .eq('user_id', currentUser.id);
         
-        if (userSnapshot.exists()) {
-          const userData = userSnapshot.val();
-          set(userRef, {
-            ...userData,
-            score: newXpPoints,
-            lastUpdated: new Date().toISOString()
-          });
-        }
+      if (error) {
+        console.error('Error updating leaderboard score:', error);
       }
       
       // Refresh local data
-      syncUserProgressToFirebase();
+      syncUserProgressToSupabase();
     } catch (error) {
       console.error('Error adding random XP:', error);
     }
-  }, [currentUser, syncUserProgressToFirebase]);
+  }, [currentUser, syncUserProgressToSupabase]);
 
   // Effect to load data with pagination
   useEffect(() => {
@@ -230,258 +227,343 @@ const Leaderboard = () => {
         const currentUserData = JSON.parse(localStorage.getItem('user') || '{}');
         setCurrentUser(currentUserData);
         
-        // Check if Firebase is available
-        if (!database) {
-          console.warn('Firebase not available, using sample data');
-          const customizedSampleData = addCurrentUserToSampleData();
-          setUsers(customizedSampleData);
-          setTotalUsers(customizedSampleData.length);
-          setUsingSampleData(true);
-          setLoading(false);
-          setInitialLoading(false);
-          return;
-        }
-        
-        // Sync local user data to Firebase on mount
-        syncUserProgressToFirebase();
-        
-        // Set up Firebase listener with pagination
-        const usersRef = ref(database, 'users');
-        const usersQuery = query(usersRef, orderByChild('score'));
-        
-        // Set a timeout for Firebase loading
-        const timeoutId = setTimeout(() => {
-          if (loading) {
-            console.warn('Firebase taking too long, using sample data');
-            const customizedSampleData = addCurrentUserToSampleData();
-            setUsers(customizedSampleData);
-            setTotalUsers(customizedSampleData.length);
-            setUsingSampleData(true);
-            setLoading(false);
-            setInitialLoading(false);
-          }
-        }, 3000); // Reduced from 5s to 3s
-        
-        const unsubscribe = onValue(usersQuery, (snapshot) => {
-          clearTimeout(timeoutId);
+        try {
+          // Sync local user data to Supabase on mount
+          await syncUserProgressToSupabase();
           
-          if (snapshot.exists()) {
-            const usersData = snapshot.val();
+          // Calculate pagination
+          const from = (page - 1) * usersPerPage;
+          const to = from + usersPerPage - 1;
+          
+          // Get total count
+          const { count, error: countError } = await supabase
+            .from('leaderboard')
+            .select('*', { count: 'exact', head: true });
             
-            // Convert Firebase object to array
-            const usersArray = Object.keys(usersData).map(key => ({
-              _id: key,
-              ...usersData[key]
-            }));
+          if (countError) {
+            throw countError;
+          }
+          
+          setTotalUsers(count || 0);
+          
+          // Get leaderboard data with pagination
+          const { data, error } = await supabase
+            .from('leaderboard')
+            .select('*')
+            .order('score', { ascending: false })
+            .range(from, to);
             
-            // Sort by score (descending)
-            const sortedUsers = usersArray.sort((a, b) => b.score - a.score);
-            
-            // Add rank
-            const rankedUsers = sortedUsers.map((user, index) => ({
+          if (error) {
+            throw error;
+          }
+          
+          if (data && data.length > 0) {
+            // Add rank to each user
+            const rankedData = data.map((user, index) => ({
               ...user,
-              rank: index + 1
+              rank: from + index + 1
             }));
             
-            setTotalUsers(rankedUsers.length);
-            
-            // Get the paginated subset of users
-            const startIndex = 0;
-            const endIndex = Math.min(usersPerPage * page, rankedUsers.length);
-            const paginatedUsers = rankedUsers.slice(startIndex, endIndex);
-            
-            setUsers(paginatedUsers);
+            setUsers(rankedData);
             setUsingSampleData(false);
           } else {
-            // If no data is found, use sample data
+            // No data or error, use sample data
             const customizedSampleData = addCurrentUserToSampleData();
             setUsers(customizedSampleData);
-            setTotalUsers(customizedSampleData.length);
             setUsingSampleData(true);
           }
-          
-          setLoading(false);
-          setInitialLoading(false);
-          setError(null);
-        }, (error) => {
+        } catch (error) {
           console.error('Error fetching leaderboard data:', error);
-          setError('Terjadi kesalahan saat memuat data leaderboard');
-          
-          // Use sample data in case of error
+          // Fallback to sample data
           const customizedSampleData = addCurrentUserToSampleData();
           setUsers(customizedSampleData);
           setTotalUsers(customizedSampleData.length);
           setUsingSampleData(true);
-          setLoading(false);
-          setInitialLoading(false);
-          
-          // Clear timeout
-          clearTimeout(timeoutId);
-        });
+        }
         
-        // Clean up the listener on unmount
-        return () => {
-          unsubscribe && unsubscribe();
-          clearTimeout(timeoutId);
-        };
+        setLoading(false);
+        setInitialLoading(false);
       } catch (err) {
-        console.error('Error setting up Firebase:', err);
-        setError('Terjadi kesalahan saat menghubungkan ke database');
-        
-        // Use sample data in case of error
-        const customizedSampleData = addCurrentUserToSampleData();
-        setUsers(customizedSampleData);
-        setTotalUsers(customizedSampleData.length);
-        setUsingSampleData(true);
+        console.error('Error in loadLeaderboardData:', err);
+        setError(err.message);
         setLoading(false);
         setInitialLoading(false);
       }
     };
     
     loadLeaderboardData();
-  }, [page, addCurrentUserToSampleData, syncUserProgressToFirebase]);
-
-  // Effect to sync local changes to Firebase
-  useEffect(() => {
-    // Listen for localStorage changes
-    const handleStorageChange = (e) => {
-      if (e.key === 'userProgress') {
-        syncUserProgressToFirebase();
-      }
+    
+    // Set up a real-time subscription to leaderboard updates
+    const subscribeToLeaderboard = async () => {
+      const subscription = supabase
+        .channel('leaderboard-changes')
+        .on('postgres_changes', 
+          { 
+            event: '*', 
+            schema: 'public', 
+            table: 'leaderboard' 
+          }, 
+          (payload) => {
+            // Refresh data when changes occur
+            loadLeaderboardData();
+          }
+        )
+        .subscribe();
+        
+      return () => {
+        supabase.removeChannel(subscription);
+      };
     };
     
-    window.addEventListener('storage', handleStorageChange);
+    const unsubscribe = subscribeToLeaderboard();
     
-    // Clean up event listener on unmount
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, [page, syncUserProgressToSupabase, addCurrentUserToSampleData]);
+
+  const handleStorageChange = (e) => {
+    if (e.key === 'userProgress') {
+      syncUserProgressToSupabase();
+    }
+  };
+
+  useEffect(() => {
+    // Listen for localStorage changes
+    window.addEventListener('storage', handleStorageChange);
     return () => {
       window.removeEventListener('storage', handleStorageChange);
     };
-  }, [syncUserProgressToFirebase]);
+  }, [syncUserProgressToSupabase]);
 
-  // Load more data when scrolling to bottom
-  const loadMoreData = useCallback(() => {
-    if (!loading && users.length < totalUsers) {
-      setPage(prevPage => prevPage + 1);
+  const totalPages = useMemo(() => {
+    return Math.ceil(totalUsers / usersPerPage);
+  }, [totalUsers]);
+
+  const handlePreviousPage = () => {
+    if (page > 1) {
+      setPage(page - 1);
     }
-  }, [loading, users.length, totalUsers]);
+  };
 
-  // Find current user position
-  const currentUserPosition = useMemo(() => {
-    if (!currentUser || !users.length) return null;
-    return users.findIndex(user => user._id === currentUser.id) + 1;
-  }, [currentUser, users]);
+  const handleNextPage = () => {
+    if (page < totalPages) {
+      setPage(page + 1);
+    }
+  };
 
-  // Render skeleton loading state
-  if (initialLoading) {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <h1 className="text-3xl font-bold text-gray-800 mb-8 text-center">Leaderboard Pengguna</h1>
-        
-        <div className="bg-white shadow-md rounded-lg overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Peringkat
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Username
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Skor (XP)
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {Array(10).fill(0).map((_, index) => (
-                <SkeletonRow key={index} />
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    );
-  }
+  const pageNumbers = useMemo(() => {
+    const numbers = [];
+    const maxButtons = 5;
+    
+    // Add page numbers based on current page position
+    if (totalPages <= maxButtons) {
+      // Show all pages if total is less than max buttons
+      for (let i = 1; i <= totalPages; i++) {
+        numbers.push(i);
+      }
+    } else {
+      // Show a subset of pages with current page in middle if possible
+      let startPage = Math.max(1, page - Math.floor(maxButtons / 2));
+      let endPage = Math.min(totalPages, startPage + maxButtons - 1);
+      
+      // Adjust if we're near the end
+      if (endPage === totalPages) {
+        startPage = Math.max(1, endPage - maxButtons + 1);
+      }
+      
+      for (let i = startPage; i <= endPage; i++) {
+        numbers.push(i);
+      }
+    }
+    
+    return numbers;
+  }, [page, totalPages]);
+
+  // Check if current user is in the displayed leaderboard
+  const isCurrentUserInList = useMemo(() => {
+    return currentUser && users.some(user => {
+      // Handle both Firebase and Supabase data structures
+      const userId = user.user_id || user.id;
+      return userId === currentUser.id;
+    });
+  }, [users, currentUser]);
+
+  // Get current user's rank from full list
+  const currentUserData = useMemo(() => {
+    if (!currentUser) return null;
+    
+    return users.find(user => {
+      // Handle both Firebase and Supabase data structures
+      const userId = user.user_id || user.id;
+      return userId === currentUser.id;
+    });
+  }, [users, currentUser]);
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold text-gray-800 mb-8 text-center">Leaderboard Pengguna</h1>
-      
-      {error && (
-        <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6" role="alert">
-          <p>{error}</p>
+    <div className="bg-gray-50 min-h-screen py-8 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-6xl mx-auto">
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">Papan Peringkat</h1>
+          <p className="mt-2 text-gray-600">
+            {usingSampleData ? 
+              'Menggunakan data contoh karena database tidak tersedia.' : 
+              'Peringkat berdasarkan perolehan XP'
+            }
+          </p>
         </div>
-      )}
-
-      <div className="bg-white shadow-md rounded-lg overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Peringkat
-              </th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Username
-              </th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Skor (XP)
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {users.length > 0 ? (
-              users.map((user) => (
-                <UserRow 
-                  key={user._id} 
-                  user={user} 
-                  isCurrentUser={currentUser && user._id === currentUser.id}
-                />
-              ))
-            ) : (
-              <tr>
-                <td colSpan="3" className="px-6 py-4 text-center text-gray-500">
-                  Belum ada data pengguna
-                </td>
-              </tr>
-            )}
-            {loading && Array(3).fill(0).map((_, index) => (
-              <SkeletonRow key={`loading-${index}`} />
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {users.length < totalUsers && (
-        <div className="mt-4 text-center">
-          <button 
-            onClick={loadMoreData}
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-            disabled={loading}
-          >
-            {loading ? 'Memuat...' : 'Muat Lebih Banyak'}
-          </button>
-        </div>
-      )}
-
-      {/* Information about realtime syncing */}
-      <div className="mt-6 text-center text-sm text-gray-600">
-        <p>Data peringkat disinkronkan secara realtime untuk semua pengguna.</p>
-        {usingSampleData && (
-          <p className="text-yellow-600 mt-1">Menggunakan data contoh karena tidak terhubung ke database.</p>
+        
+        {/* Current user card */}
+        {currentUser && currentUserData && (
+          <div className="bg-white shadow-lg rounded-lg p-6 mb-8 border-l-4 border-blue-500">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <div className={`flex-shrink-0 h-12 w-12 rounded-full flex items-center justify-center text-xl font-bold ${
+                  currentUserData.rank === 1 
+                    ? 'bg-yellow-100 text-yellow-800' 
+                    : currentUserData.rank === 2 
+                    ? 'bg-gray-100 text-gray-800' 
+                    : currentUserData.rank === 3 
+                    ? 'bg-yellow-600 text-white' 
+                    : 'bg-blue-100 text-blue-800'
+                }`}>
+                  {currentUserData.rank || '?'}
+                </div>
+                <div className="ml-4">
+                  <h2 className="text-xl font-semibold text-gray-900">{currentUser.name || 'User'}</h2>
+                  <p className="text-gray-500">Peringkat Saat Ini</p>
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="text-3xl font-bold text-gray-900">{currentUserData.score || 0}</div>
+                <p className="text-gray-500">XP</p>
+              </div>
+              {!usingSampleData && (
+                <button 
+                  onClick={addRandomXp} 
+                  className="ml-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  +XP (Test)
+                </button>
+              )}
+            </div>
+          </div>
         )}
-      </div>
-
-      {/* Test button to add random XP (only visible in development) */}
-      {import.meta.env.DEV && currentUser && (
-        <div className="mt-6 text-center">
-          <button
-            onClick={addRandomXp}
-            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
-          >
-            Tambah XP Acak (Testing)
-          </button>
+        
+        {/* Leaderboard table */}
+        <div className="bg-white shadow-lg rounded-lg overflow-hidden">
+          <div className="px-4 py-5 sm:px-6 bg-gray-50 border-b border-gray-200">
+            <h3 className="text-lg leading-6 font-medium text-gray-900">
+              {usingSampleData ? 'Contoh Papan Peringkat' : 'Peringkat Global'}
+            </h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Peringkat
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Pengguna
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Skor
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {loading ? (
+                  // Skeleton loading
+                  Array(8).fill().map((_, i) => <SkeletonRow key={i} />)
+                ) : error ? (
+                  <tr>
+                    <td colSpan="3" className="px-6 py-4 text-center text-red-500">
+                      Error: {error}
+                    </td>
+                  </tr>
+                ) : users.length === 0 ? (
+                  <tr>
+                    <td colSpan="3" className="px-6 py-4 text-center text-gray-500">
+                      Belum ada data untuk ditampilkan
+                    </td>
+                  </tr>
+                ) : (
+                  // Display users
+                  users.map(user => {
+                    const userId = user.user_id || user.id;
+                    const isCurrentUserRow = currentUser && userId === currentUser.id;
+                    
+                    return (
+                      <UserRow 
+                        key={userId} 
+                        user={user} 
+                        isCurrentUser={isCurrentUserRow} 
+                      />
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+          
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+              <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm text-gray-700">
+                    Menampilkan <span className="font-medium">{(page - 1) * usersPerPage + 1}</span> hingga <span className="font-medium">{Math.min(page * usersPerPage, totalUsers)}</span> dari <span className="font-medium">{totalUsers}</span> pengguna
+                  </p>
+                </div>
+                <div>
+                  <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                    <button
+                      onClick={handlePreviousPage}
+                      disabled={page === 1}
+                      className={`relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium ${
+                        page === 1 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:bg-gray-50'
+                      }`}
+                    >
+                      <span className="sr-only">Previous</span>
+                      <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    </button>
+                    
+                    {pageNumbers.map(number => (
+                      <button
+                        key={number}
+                        onClick={() => setPage(number)}
+                        className={`relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium ${
+                          page === number 
+                            ? 'z-10 bg-blue-50 border-blue-500 text-blue-600' 
+                            : 'text-gray-500 hover:bg-gray-50'
+                        }`}
+                      >
+                        {number}
+                      </button>
+                    ))}
+                    
+                    <button
+                      onClick={handleNextPage}
+                      disabled={page === totalPages}
+                      className={`relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium ${
+                        page === totalPages ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:bg-gray-50'
+                      }`}
+                    >
+                      <span className="sr-only">Next</span>
+                      <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                      </svg>
+                    </button>
+                  </nav>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 };

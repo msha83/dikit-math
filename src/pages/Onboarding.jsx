@@ -1,31 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getDatabase, ref, update } from 'firebase/database';
-import { initializeApp } from 'firebase/app';
 
-// Firebase configuration - matches the one in Login and Register
-const firebaseConfig = {
-  apiKey: "AIzaSyA_w7oAXXQVCfWuWXSiG9j2wI6o0GGmwjM",
-  authDomain: "mathedu-leaderboard.firebaseapp.com",
-  projectId: "mathedu-leaderboard",
-  storageBucket: "mathedu-leaderboard.appspot.com",
-  messagingSenderId: "485273185384",
-  appId: "1:485273185384:web:ebc257b3adb7b7a70fd5c2",
-  databaseURL: "https://mathedu-leaderboard-default-rtdb.asia-southeast1.firebasedatabase.app"
-};
+// Import Supabase client
+import { supabase } from '../config/supabase';
 
-// Initialize Firebase if not already initialized
-let app;
-try {
-  app = initializeApp(firebaseConfig);
-} catch (error) {
-  // Firebase already initialized
-  app = initializeApp(firebaseConfig, "secondary");
-}
-const database = getDatabase(app);
+// Import Auth context
+import { useAuth } from '../context/AuthContext';
 
 const Onboarding = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [currentStep, setCurrentStep] = useState(1);
   const [selectedTopics, setSelectedTopics] = useState([]);
   const [selectedLevel, setSelectedLevel] = useState('');
@@ -36,9 +20,9 @@ const Onboarding = () => {
   // Check if user is authenticated
   useEffect(() => {
     const token = localStorage.getItem('token');
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const userData = JSON.parse(localStorage.getItem('user') || '{}');
     
-    if (!token || !user.id) {
+    if (!token || !userData.id) {
       navigate('/login');
     }
   }, [navigate]);
@@ -114,9 +98,9 @@ const Onboarding = () => {
   const handleFinishOnboarding = async () => {
     setLoading(true);
     try {
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const userData = JSON.parse(localStorage.getItem('user') || '{}');
       
-      if (!user.id) {
+      if (!userData.id) {
         throw new Error('User not found');
       }
 
@@ -132,13 +116,20 @@ const Onboarding = () => {
       
       localStorage.setItem('onboarding', JSON.stringify(onboardingData));
       
-      // Update user preferences in Firebase
-      const userRef = ref(database, `users/${user.id}`);
-      await update(userRef, {
-        preferences: onboardingData,
-        onboardingCompleted: true,
-        lastUpdated: new Date().toISOString()
-      });
+      // Update user preferences in Supabase
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          preferences: onboardingData,
+          onboarded: true,
+          last_updated: new Date().toISOString()
+        })
+        .eq('id', userData.id);
+
+      if (error) {
+        console.error('Error updating profile:', error);
+        throw error;
+      }
 
       // Update user progress based on selected level
       const userProgress = JSON.parse(localStorage.getItem('userProgress') || '{}');
@@ -166,6 +157,10 @@ const Onboarding = () => {
       }
       
       localStorage.setItem('userProgress', JSON.stringify(updatedProgress));
+      
+      // Update the user data in localStorage to reflect onboarding completion
+      const updatedUserData = { ...userData, onboarded: true };
+      localStorage.setItem('user', JSON.stringify(updatedUserData));
       
       // Navigate to dashboard after successful onboarding
       setLoading(false);
@@ -259,7 +254,7 @@ const Onboarding = () => {
             <div className="space-y-6">
               <div className="text-center">
                 <h2 className="text-2xl font-bold text-gray-900">Apa Tujuan Belajarmu?</h2>
-                <p className="mt-2 text-gray-600">Kami akan membantu mencapai tujuanmu</p>
+                <p className="mt-2 text-gray-600">Pilih tujuan utama belajar matematika</p>
               </div>
               
               <div className="grid grid-cols-2 gap-4">
@@ -273,7 +268,7 @@ const Onboarding = () => {
                         : 'border-gray-200 hover:border-blue-300'
                     }`}
                   >
-                    <div className="text-2xl mb-2">{goal.icon}</div>
+                    <div className="text-3xl mb-2">{goal.icon}</div>
                     <div className="font-medium">{goal.name}</div>
                   </div>
                 ))}
@@ -286,7 +281,7 @@ const Onboarding = () => {
             <div className="space-y-6">
               <div className="text-center">
                 <h2 className="text-2xl font-bold text-gray-900">Berapa Lama Waktu Belajarmu?</h2>
-                <p className="mt-2 text-gray-600">Jadwal belajar yang konsisten adalah kunci keberhasilan</p>
+                <p className="mt-2 text-gray-600">Pilih berapa lama kamu bisa belajar setiap hari</p>
               </div>
               
               <div className="space-y-4">
@@ -308,27 +303,26 @@ const Onboarding = () => {
             </div>
           )}
 
-          {/* Navigation buttons */}
-          <div className="mt-8 flex justify-between">
-            <button
-              onClick={handlePreviousStep}
-              disabled={currentStep === 1}
-              className={`px-4 py-2 rounded-md font-medium ${
-                currentStep === 1 
-                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              Kembali
-            </button>
+          {/* Navigation Buttons */}
+          <div className="mt-8 flex items-center justify-between">
+            {currentStep > 1 ? (
+              <button 
+                onClick={handlePreviousStep}
+                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+              >
+                Kembali
+              </button>
+            ) : (
+              <div></div>
+            )}
             
-            <button
+            <button 
               onClick={handleNextStep}
               disabled={!isStepValid() || loading}
-              className={`px-4 py-2 rounded-md font-medium ${
-                !isStepValid() || loading
-                  ? 'bg-blue-300 text-white cursor-not-allowed' 
-                  : 'bg-blue-600 text-white hover:bg-blue-700'
+              className={`px-4 py-2 rounded-md text-white ${
+                isStepValid() && !loading 
+                  ? 'bg-blue-600 hover:bg-blue-700' 
+                  : 'bg-gray-400 cursor-not-allowed'
               }`}
             >
               {loading ? (
@@ -339,7 +333,7 @@ const Onboarding = () => {
                   </svg>
                   Memproses...
                 </span>
-              ) : currentStep === 4 ? 'Selesai' : 'Lanjut'}
+              ) : currentStep < 4 ? 'Selanjutnya' : 'Selesai'}
             </button>
           </div>
         </div>
