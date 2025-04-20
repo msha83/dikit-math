@@ -77,7 +77,7 @@ export default defineConfig({
             'react-dom', 
             'react-router-dom'
           ],
-          firebase: ['firebase/app', 'firebase/auth', 'firebase/database'],
+          supabase: ['@supabase/supabase-js'],
           ui: ['@mui/material', '@mui/icons-material', '@emotion/react', '@emotion/styled'],
         },
       },
