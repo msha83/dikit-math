@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import '../styles/Login.css';
 
@@ -13,7 +13,7 @@ const logoPath = '/logo.png';
 
 const Login = () => {
   const navigate = useNavigate();
-  const { signIn, user, loading: authLoading } = useAuth();
+  const { signIn, user, loading: authLoading, isRateLimited, rateLimitRemainingTime } = useAuth();
   const [formData, setFormData] = useState({
     email: '',
     password: ''
@@ -21,6 +21,9 @@ const Login = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [initialChecking, setInitialChecking] = useState(true);
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
+  const [isInCooldown, setIsInCooldown] = useState(false);
+  const cooldownTimerRef = useRef(null);
 
   useEffect(() => {
     // Check if user is already logged in
@@ -37,7 +40,45 @@ const Login = () => {
     }
     
     setInitialChecking(false);
+
+    // Cleanup timer on unmount
+    return () => {
+      if (cooldownTimerRef.current) {
+        clearInterval(cooldownTimerRef.current);
+      }
+    };
   }, [user, navigate]);
+
+  // Handle cooldown timer
+  useEffect(() => {
+    if (cooldownSeconds > 0) {
+      setIsInCooldown(true);
+      cooldownTimerRef.current = setInterval(() => {
+        setCooldownSeconds(prevSeconds => {
+          if (prevSeconds <= 1) {
+            clearInterval(cooldownTimerRef.current);
+            setIsInCooldown(false);
+            return 0;
+          }
+          return prevSeconds - 1;
+        });
+      }, 1000);
+    }
+
+    return () => {
+      if (cooldownTimerRef.current) {
+        clearInterval(cooldownTimerRef.current);
+      }
+    };
+  }, [cooldownSeconds]);
+
+  // Handle global rate limiting from AuthContext
+  useEffect(() => {
+    if (isRateLimited) {
+      setCooldownSeconds(rateLimitRemainingTime);
+      setError(`Terlalu banyak percobaan. Silakan tunggu ${rateLimitRemainingTime} detik sebelum mencoba lagi.`);
+    }
+  }, [isRateLimited, rateLimitRemainingTime]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -51,6 +92,12 @@ const Login = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Prevent submission during cooldown
+    if (isInCooldown || isRateLimited) {
+      return;
+    }
+    
     setError('');
     setLoading(true);
     
@@ -115,6 +162,18 @@ const Login = () => {
         setError('Email belum dikonfirmasi. Silakan periksa email Anda.');
       } else if (errorMessage.includes('Too many requests')) {
         setError('Terlalu banyak percobaan login. Silakan coba lagi nanti.');
+        setCooldownSeconds(30); // Default cooldown if specific time not provided
+      } else if (errorMessage.includes('you can only request this after')) {
+        // Extract the number of seconds from the error message
+        const waitTimeMatch = errorMessage.match(/after (\d+) seconds/);
+        if (waitTimeMatch && waitTimeMatch[1]) {
+          const waitTime = parseInt(waitTimeMatch[1], 10);
+          setCooldownSeconds(waitTime);
+          setError(`Terlalu banyak percobaan. Silakan tunggu ${waitTime} detik sebelum mencoba lagi.`);
+        } else {
+          setError('Terlalu banyak percobaan. Silakan tunggu beberapa saat sebelum mencoba lagi.');
+          setCooldownSeconds(30);
+        }
       } else if (errorMessage.includes('network')) {
         setError('Gagal terhubung ke server. Periksa koneksi internet Anda.');
       } else {
@@ -162,7 +221,16 @@ const Login = () => {
         <form onSubmit={handleSubmit} className="login-form">
           <h2>Masuk ke Akun</h2>
           
-          {error && <div className="error-message">{error}</div>}
+          {error && (
+            <div className="error-message">
+              {error}
+              {isInCooldown && (
+                <div className="mt-2 text-sm">
+                  Silakan coba lagi dalam: {cooldownSeconds} detik
+                </div>
+              )}
+            </div>
+          )}
           
           <div className="form-group">
             <label htmlFor="email">Email</label>
@@ -195,9 +263,9 @@ const Login = () => {
           <button 
             type="submit" 
             className="login-button"
-            disabled={loading}
+            disabled={loading || isInCooldown}
           >
-            {loading ? 'Memproses...' : 'Masuk'}
+            {loading ? 'Memproses...' : isInCooldown ? `Tunggu ${cooldownSeconds}s` : 'Masuk'}
           </button>
 
           <div className="login-links">

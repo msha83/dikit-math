@@ -9,6 +9,8 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isRateLimited, setIsRateLimited] = useState(false);
+  const [rateLimitRemainingTime, setRateLimitRemainingTime] = useState(0);
 
   useEffect(() => {
     // Check for active session on component mount
@@ -40,9 +42,52 @@ export const AuthProvider = ({ children }) => {
     };
   }, []);
 
+  // Handle rate limit countdown
+  useEffect(() => {
+    let timer;
+    if (isRateLimited && rateLimitRemainingTime > 0) {
+      timer = setInterval(() => {
+        setRateLimitRemainingTime(prev => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            setIsRateLimited(false);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [isRateLimited, rateLimitRemainingTime]);
+
+  // Function to handle rate limit errors
+  const handleRateLimitError = (error) => {
+    if (error.message.includes('you can only request this after')) {
+      const waitTimeMatch = error.message.match(/after (\d+) seconds/);
+      if (waitTimeMatch && waitTimeMatch[1]) {
+        const waitTime = parseInt(waitTimeMatch[1], 10);
+        setRateLimitRemainingTime(waitTime);
+        setIsRateLimited(true);
+      }
+    } else if (error.message.includes('Too Many Requests')) {
+      setRateLimitRemainingTime(30); // Default 30 seconds if specific time is not provided
+      setIsRateLimited(true);
+    }
+  };
+
   const signUp = async (email, password, name) => {
     setLoading(true);
     setError(null);
+    
+    // Check if currently rate limited
+    if (isRateLimited) {
+      setError(`Terlalu banyak percobaan. Silakan tunggu ${rateLimitRemainingTime} detik.`);
+      setLoading(false);
+      throw new Error(`Rate limited. Please try again in ${rateLimitRemainingTime} seconds.`);
+    }
     
     try {
       const { data, error } = await supabase.auth.signUp({
@@ -59,6 +104,10 @@ export const AuthProvider = ({ children }) => {
       return data;
     } catch (error) {
       console.error('Error signing up:', error);
+      
+      // Check for rate limiting errors
+      handleRateLimitError(error);
+      
       setError(error.message);
       throw error;
     } finally {
@@ -70,6 +119,13 @@ export const AuthProvider = ({ children }) => {
     setLoading(true);
     setError(null);
     
+    // Check if currently rate limited
+    if (isRateLimited) {
+      setError(`Terlalu banyak percobaan. Silakan tunggu ${rateLimitRemainingTime} detik.`);
+      setLoading(false);
+      throw new Error(`Rate limited. Please try again in ${rateLimitRemainingTime} seconds.`);
+    }
+    
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
@@ -80,6 +136,10 @@ export const AuthProvider = ({ children }) => {
       return data;
     } catch (error) {
       console.error('Error signing in:', error);
+      
+      // Check for rate limiting errors
+      handleRateLimitError(error);
+      
       setError(error.message);
       throw error;
     } finally {
@@ -107,7 +167,9 @@ export const AuthProvider = ({ children }) => {
     error,
     signUp,
     signIn,
-    signOut
+    signOut,
+    isRateLimited,
+    rateLimitRemainingTime
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

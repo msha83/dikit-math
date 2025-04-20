@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 // Import Auth Context hook
@@ -22,6 +22,9 @@ const Register = () => {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [initialChecking, setInitialChecking] = useState(true);
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
+  const [isInCooldown, setIsInCooldown] = useState(false);
+  const cooldownTimerRef = useRef(null);
 
   useEffect(() => {
     // Check if user is already logged in
@@ -30,7 +33,37 @@ const Register = () => {
     }
     
     setInitialChecking(false);
+
+    // Cleanup timer on unmount
+    return () => {
+      if (cooldownTimerRef.current) {
+        clearInterval(cooldownTimerRef.current);
+      }
+    };
   }, [user, navigate]);
+
+  // Handle cooldown timer
+  useEffect(() => {
+    if (cooldownSeconds > 0) {
+      setIsInCooldown(true);
+      cooldownTimerRef.current = setInterval(() => {
+        setCooldownSeconds(prevSeconds => {
+          if (prevSeconds <= 1) {
+            clearInterval(cooldownTimerRef.current);
+            setIsInCooldown(false);
+            return 0;
+          }
+          return prevSeconds - 1;
+        });
+      }, 1000);
+    }
+
+    return () => {
+      if (cooldownTimerRef.current) {
+        clearInterval(cooldownTimerRef.current);
+      }
+    };
+  }, [cooldownSeconds]);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -40,6 +73,12 @@ const Register = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Prevent submission during cooldown
+    if (isInCooldown) {
+      return;
+    }
+    
     setIsLoading(true);
     setError('');
 
@@ -128,8 +167,21 @@ const Register = () => {
       
       let errorMessage = 'Terjadi kesalahan saat pendaftaran. Silakan coba lagi.';
       
-      // Map auth errors to user-friendly messages
-      if (error.message.includes('email already in use') || error.message.includes('already registered')) {
+      // Handle rate limiting errors
+      if (error.message.includes('you can only request this after')) {
+        // Extract the number of seconds from the error message
+        const waitTimeMatch = error.message.match(/after (\d+) seconds/);
+        if (waitTimeMatch && waitTimeMatch[1]) {
+          const waitTime = parseInt(waitTimeMatch[1], 10);
+          setCooldownSeconds(waitTime);
+          errorMessage = `Terlalu banyak percobaan. Silakan tunggu ${waitTime} detik sebelum mencoba lagi.`;
+        } else {
+          errorMessage = 'Terlalu banyak percobaan. Silakan tunggu beberapa saat sebelum mencoba lagi.';
+        }
+      } else if (error.message.includes('Too Many Requests')) {
+        setCooldownSeconds(30); // Default cooldown if specific time not provided
+        errorMessage = 'Terlalu banyak percobaan. Silakan tunggu 30 detik sebelum mencoba lagi.';
+      } else if (error.message.includes('email already in use') || error.message.includes('already registered')) {
         errorMessage = 'Email sudah terdaftar. Silakan gunakan email lain.';
       } else if (error.message.includes('invalid email')) {
         errorMessage = 'Format email tidak valid.';
@@ -194,6 +246,11 @@ const Register = () => {
                       </div>
                       <div className="ml-3">
                         <h3 className="text-sm font-medium text-red-800">{error}</h3>
+                        {isInCooldown && (
+                          <div className="mt-2 text-sm text-red-700">
+                            Silakan coba lagi dalam: {cooldownSeconds} detik
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -274,10 +331,10 @@ const Register = () => {
                 <div>
                   <button
                     type="submit"
-                    disabled={isLoading}
-                    className="flex w-full justify-center rounded-md border border-transparent bg-blue-600 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                    disabled={isLoading || isInCooldown}
+                    className={`flex w-full justify-center rounded-md border border-transparent bg-blue-600 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${(isLoading || isInCooldown) ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
-                    {isLoading ? 'Memproses...' : 'Daftar'}
+                    {isLoading ? 'Memproses...' : isInCooldown ? `Tunggu ${cooldownSeconds}s` : 'Daftar'}
                   </button>
                 </div>
               </form>
