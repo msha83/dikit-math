@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>MathEdu - Redirecting</title>
+  <script>
+    // ====================================================================================================================
+    // This is a SPA fallback script that handles client-side routing when a user tries to access a non-root URL directly
+    // Debug version with console logging to help diagnose routing issues
+    // ====================================================================================================================
+    
+    console.log('404.html: Script started, current location:', window.location.href);
+    
+    // Single Page Apps for GitHub Pages or other static hosts
+    // https://github.com/rafgraph/spa-github-pages
+    
+    // This script checks to see if a redirect is present in the query string.
+    // If it's not, it sets up a history for the first load.
+    (function(l) {
+      if (l.search[1] === '/' ) {
+        var decoded = l.search.slice(1).split('&').map(function(s) { 
+          return s.replace(/~and~/g, '&')
+        }).join('?');
+        console.log('404.html: Found redirect in search params, redirecting to:', l.pathname.slice(0, -1) + decoded + l.hash);
+        window.history.replaceState(null, null,
+            l.pathname.slice(0, -1) + decoded + l.hash
+        );
+      } else {
+        console.log('404.html: No redirect found in search params');
+      }
+    }(window.location))
+    
+    // Store the URL for restoration in the index.html
+    console.log('404.html: Storing current URL in sessionStorage:', location.href);
+    sessionStorage.redirect = location.href;
+    
+    // Redirect to home page
+    console.log('404.html: Redirecting to root');
+    window.location.href = '/';
+  </script>
+</head>
+<body>
+  <h1>Redirecting...</h1>
+  <p>If you are not redirected automatically, please <a href="/">click here</a>.</p>
+  <div style="margin-top: 20px; padding: 10px; background-color: #f8f8f8; border: 1px solid #ddd; border-radius: 4px;">
+    <p style="font-size: 14px; color: #666;">
+      Debug info: Trying to access <span id="current-url" style="font-family: monospace;"></span>
+    </p>
+  </div>
+  
+  <script>
+    // Add current URL to the debug info
+    document.getElementById('current-url').textContent = window.location.href;
+  </script>
+</body>
+</html> 

@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="DiKit - Platform belajar matematika interaktif dengan materi dan latihan soal yang dipersonalisasi untuk meningkatkan kemampuan matematika Anda" />
+    <meta name="keywords" content="matematika, belajar matematika, latihan soal matematika, pembelajaran interaktif" />
+    <meta name="theme-color" content="#4F46E5" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="MathEdu" />
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    
+    <!-- PWA manifest -->
+    <link rel="manifest" href="/manifest.json" />
+    
+    <!-- Favicons y iconos para diferentes plataformas -->
+    <link rel="icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" href="/logo192.png" />
+    
+    <!-- Preconexiones para mejorar el rendimiento -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    
+    <!-- GeoGebra script preload -->
+    <link rel="preload" href="https://www.geogebra.org/apps/deployggb.js" as="script" />
+    
+    <!-- Fuentes de Google -->
+    <link 
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" 
+      rel="stylesheet" 
+      media="print" 
+      onload="this.media='all'" 
+    />
+    
+    <!-- Enhanced redirect handler from 404 page -->
+    <script>
+      (function() {
+        // Check if we have a redirect from the 404 page
+        var redirect = sessionStorage.redirect;
+        if (redirect) {
+          console.log('index.html: Detected redirect from 404 page:', redirect);
+          delete sessionStorage.redirect;
+          
+          // Only redirect if the URL is different
+          if (redirect !== location.href) {
+            console.log('index.html: Restoring route to:', redirect);
+            
+            // Remove the base URL to get just the path
+            var path = redirect.replace(window.location.origin, '');
+            
+            // Use history API to navigate without refresh
+            history.replaceState(null, null, path);
+            console.log('index.html: History state replaced with:', path);
+            
+            // Create a custom event to notify the app about the route change
+            window.dispatchEvent(new CustomEvent('spa-route-change', { 
+              detail: { path: path }
+            }));
+          } else {
+            console.log('index.html: URLs match, no redirect needed');
+          }
+        } else {
+          console.log('index.html: No redirect data found in sessionStorage');
+        }
+      })();
+    </script>
+    
+    <title>DiKit - Platform Pembelajaran Matematika Interaktif</title>
+    <script type="module" crossorigin src="/assets/index-CVYiwzRo.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/vendor-C3gKaNvt.js">
+    <link rel="modulepreload" crossorigin href="/assets/ui-BoKmkzIG.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-BFmzOdt1.css">
+  </head>
+  <body class="font-inter">
+    <div id="root"></div>
+    <noscript>Anda perlu mengaktifkan JavaScript untuk menjalankan aplikasi ini.</noscript>
+    
+    <!-- Registro del Service Worker -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/serviceWorker.js')
+            .then(registration => {
+              console.log('SW registered:', registration);
+            })
+            .catch(error => {
+              console.log('SW registration failed:', error);
+            });
+        });
+      }
+    </script>
+  </body>
+</html>
