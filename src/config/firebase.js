@@ -11,14 +11,15 @@ const firebaseConfig = {
   storageBucket: "dikit-math.firebasestorage.app",
   messagingSenderId: "601886976432",
   appId: "1:601886976432:web:5c9cba685e137746d64e75",
-  measurementId: "G-RF5FCB6YZZ"
+  measurementId: "G-RF5FCB6YZZ",
+  databaseURL: "https://dikit-math-default-rtdb.asia-southeast1.firebasedatabase.app"
 };
 
 console.log("=== KONFIGURASI FIREBASE ===");
-console.log("API Key yang digunakan:", firebaseConfig.apiKey?.substring(0, 5) + "..." || "Tidak ditemukan");
-console.log("Auth Domain:", firebaseConfig.authDomain || "Tidak ditemukan");
-console.log("Project ID:", firebaseConfig.projectId || "Tidak ditemukan");
-console.log("Database URL:", firebaseConfig.databaseURL || "Tidak ditemukan");
+console.log("API Key yang digunakan:", firebaseConfig.apiKey);
+console.log("Auth Domain:", firebaseConfig.authDomain);
+console.log("Project ID:", firebaseConfig.projectId);
+console.log("Database URL:", firebaseConfig.databaseURL);
 console.log("===========================");
 
 // Initialize Firebase
@@ -26,16 +27,14 @@ let firebaseApp = null;
 try {
   if (!firebaseApp) {
     if (!firebaseConfig.apiKey) {
-      throw new Error("API Key tidak ditemukan. Pastikan file .env dikonfigurasi dengan benar.");
+      throw new Error("API Key tidak ditemukan. Pastikan konfigurasi benar.");
     }
-    console.log("Mencoba inisialisasi Firebase dengan config:", JSON.stringify(firebaseConfig, null, 2));
+    console.log("Mencoba inisialisasi Firebase");
     firebaseApp = initializeApp(firebaseConfig);
-    console.log("Firebase berhasil diinisialisasi dengan config:", firebaseApp.options);
+    console.log("Firebase berhasil diinisialisasi");
   }
 } catch (error) {
   console.error("Kesalahan saat menginisialisasi Firebase:", error);
-  console.error("Detail Error:", error.message);
-  console.error("Error Stack:", error.stack);
   
   // Add visible error message to UI when DOM is loaded
   if (typeof window !== 'undefined' && document) {
@@ -73,4 +72,4 @@ try {
 }
 
 export { auth, database, firebaseApp };
-export default firebaseApp; 
+export default firebaseApp;
