@@ -27,15 +27,16 @@ const Onboarding = () => {
     }
   }, [navigate]);
 
-  const mathTopics = [
-    { id: 'algebra', name: 'Aljabar', icon: '📊' },
-    { id: 'geometry', name: 'Geometri', icon: '📐' },
-    { id: 'statistics', name: 'Statistika', icon: '📈' },
-    { id: 'calculus', name: 'Kalkulus', icon: '∫' },
-    { id: 'trigonometry', name: 'Trigonometri', icon: '🔺' },
-    { id: 'linear-programming', name: 'Program Linier', icon: '📝' },
-    { id: 'probability', name: 'Probabilitas', icon: '🎲' },
-    { id: 'vectors', name: 'Vektor', icon: '➡️' }
+  // Daftar topik yang tersedia
+  const topics = [
+    { id: 'aljabar', name: 'Aljabar', icon: '📊' },
+    { id: 'geometri', name: 'Geometri', icon: '📐' },
+    { id: 'statistika', name: 'Statistika', icon: '📈' },
+    { id: 'kalkulus', name: 'Kalkulus', icon: '∫' },
+    { id: 'trigonometri', name: 'Trigonometri', icon: '△' },
+    { id: 'program-linier', name: 'Program Linier', icon: '✏️' },
+    { id: 'probabilitas', name: 'Probabilitas', icon: '🎲' },
+    { id: 'vektor', name: 'Vektor', icon: '➡️' }
   ];
 
   const difficultyLevels = [
@@ -58,7 +59,19 @@ const Onboarding = () => {
     { id: 'custom', name: 'Kustom', description: 'Saya akan mengatur sendiri' }
   ];
 
-  const handleTopicSelect = (topicId) => {
+  // Efek untuk mengecek apakah pengguna sudah memiliki preferensi
+  useEffect(() => {
+    const userId = localStorage.getItem('userId');
+    const userPreferences = localStorage.getItem(`userPreferences_${userId}`);
+    
+    if (userPreferences) {
+      // Pengguna sudah pernah memilih preferensi, langsung ke dashboard
+      navigate('/dashboard');
+    }
+  }, [navigate]);
+
+  // Handle klik pada topik
+  const handleTopicClick = (topicId) => {
     if (selectedTopics.includes(topicId)) {
       setSelectedTopics(selectedTopics.filter(id => id !== topicId));
     } else {
@@ -162,6 +175,16 @@ const Onboarding = () => {
       const updatedUserData = { ...userData, onboarded: true };
       localStorage.setItem('user', JSON.stringify(updatedUserData));
       
+      // Tambahkan penanda onboarding selesai
+      const users = JSON.parse(localStorage.getItem('users') || '[]');
+      const updatedUsers = users.map(user => {
+        if (user.id === userData.id) {
+          return { ...user, onboardingCompleted: true };
+        }
+        return user;
+      });
+      localStorage.setItem('users', JSON.stringify(updatedUsers));
+      
       // Navigate to dashboard after successful onboarding
       setLoading(false);
       navigate('/dashboard');
@@ -174,168 +197,38 @@ const Onboarding = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      {/* Progress bar */}
-      <div className="w-full bg-white shadow-sm py-4">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="w-full bg-gray-200 rounded-full h-2.5">
+    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-4 py-12">
+      <div className="max-w-3xl w-full bg-white rounded-lg shadow-lg p-8">
+        <h1 className="text-3xl font-bold text-center mb-2">Pilih Topik yang Ingin Dipelajari</h1>
+        <p className="text-gray-600 text-center mb-8">Pilih minimal satu topik yang ingin kamu pelajari</p>
+        
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+          {topics.map(topic => (
             <div 
-              className="bg-blue-600 h-2.5 rounded-full transition-all duration-300 ease-in-out" 
-              style={{ width: `${(currentStep / 4) * 100}%` }}
-            ></div>
-          </div>
-          <div className="flex justify-between mt-2 text-sm text-gray-500">
-            <span className={currentStep >= 1 ? "text-blue-600 font-medium" : ""}>Topik</span>
-            <span className={currentStep >= 2 ? "text-blue-600 font-medium" : ""}>Level</span>
-            <span className={currentStep >= 3 ? "text-blue-600 font-medium" : ""}>Tujuan</span>
-            <span className={currentStep >= 4 ? "text-blue-600 font-medium" : ""}>Waktu</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex-1 flex items-center justify-center p-4">
-        <div className="max-w-3xl w-full bg-white rounded-lg shadow-lg p-8">
-          {/* Step 1: Topic Selection */}
-          {currentStep === 1 && (
-            <div className="space-y-6">
-              <div className="text-center">
-                <h2 className="text-2xl font-bold text-gray-900">Pilih Topik yang Ingin Dipelajari</h2>
-                <p className="mt-2 text-gray-600">Pilih minimal satu topik yang ingin kamu pelajari</p>
-              </div>
-              
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {mathTopics.map((topic) => (
-                  <div 
-                    key={topic.id}
-                    onClick={() => handleTopicSelect(topic.id)}
-                    className={`p-4 border rounded-lg cursor-pointer transition-all hover:shadow-md ${
-                      selectedTopics.includes(topic.id) 
-                        ? 'border-blue-500 bg-blue-50' 
-                        : 'border-gray-200 hover:border-blue-300'
-                    }`}
-                  >
-                    <div className="text-3xl mb-2">{topic.icon}</div>
-                    <div className="font-medium">{topic.name}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Step 2: Level Selection */}
-          {currentStep === 2 && (
-            <div className="space-y-6">
-              <div className="text-center">
-                <h2 className="text-2xl font-bold text-gray-900">Pilih Level Kemampuan</h2>
-                <p className="mt-2 text-gray-600">Kami akan menyesuaikan materi berdasarkan levelmu</p>
-              </div>
-              
-              <div className="space-y-4">
-                {difficultyLevels.map((level) => (
-                  <div 
-                    key={level.id}
-                    onClick={() => setSelectedLevel(level.id)}
-                    className={`p-4 border rounded-lg cursor-pointer transition-all hover:shadow-md ${
-                      selectedLevel === level.id 
-                        ? 'border-blue-500 bg-blue-50' 
-                        : 'border-gray-200 hover:border-blue-300'
-                    }`}
-                  >
-                    <div className="font-medium text-lg">{level.name}</div>
-                    <div className="text-gray-600 text-sm">{level.description}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Step 3: Goal Selection */}
-          {currentStep === 3 && (
-            <div className="space-y-6">
-              <div className="text-center">
-                <h2 className="text-2xl font-bold text-gray-900">Apa Tujuan Belajarmu?</h2>
-                <p className="mt-2 text-gray-600">Pilih tujuan utama belajar matematika</p>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                {goals.map((goal) => (
-                  <div 
-                    key={goal.id}
-                    onClick={() => setLearningGoal(goal.id)}
-                    className={`p-4 border rounded-lg cursor-pointer transition-all hover:shadow-md ${
-                      learningGoal === goal.id 
-                        ? 'border-blue-500 bg-blue-50' 
-                        : 'border-gray-200 hover:border-blue-300'
-                    }`}
-                  >
-                    <div className="text-3xl mb-2">{goal.icon}</div>
-                    <div className="font-medium">{goal.name}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Step 4: Time Commitment */}
-          {currentStep === 4 && (
-            <div className="space-y-6">
-              <div className="text-center">
-                <h2 className="text-2xl font-bold text-gray-900">Berapa Lama Waktu Belajarmu?</h2>
-                <p className="mt-2 text-gray-600">Pilih berapa lama kamu bisa belajar setiap hari</p>
-              </div>
-              
-              <div className="space-y-4">
-                {timeOptions.map((option) => (
-                  <div 
-                    key={option.id}
-                    onClick={() => setLearningTime(option.id)}
-                    className={`p-4 border rounded-lg cursor-pointer transition-all hover:shadow-md ${
-                      learningTime === option.id 
-                        ? 'border-blue-500 bg-blue-50' 
-                        : 'border-gray-200 hover:border-blue-300'
-                    }`}
-                  >
-                    <div className="font-medium text-lg">{option.name}</div>
-                    <div className="text-gray-600 text-sm">{option.description}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Navigation Buttons */}
-          <div className="mt-8 flex items-center justify-between">
-            {currentStep > 1 ? (
-              <button 
-                onClick={handlePreviousStep}
-                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
-              >
-                Kembali
-              </button>
-            ) : (
-              <div></div>
-            )}
-            
-            <button 
-              onClick={handleNextStep}
-              disabled={!isStepValid() || loading}
-              className={`px-4 py-2 rounded-md text-white ${
-                isStepValid() && !loading 
-                  ? 'bg-blue-600 hover:bg-blue-700' 
-                  : 'bg-gray-400 cursor-not-allowed'
+              key={topic.id}
+              onClick={() => handleTopicClick(topic.id)}
+              className={`border rounded-lg p-4 text-center cursor-pointer transition-all duration-200 hover:shadow-md ${
+                selectedTopics.includes(topic.id) 
+                  ? 'border-blue-500 bg-blue-50' 
+                  : 'border-gray-200'
               }`}
             >
-              {loading ? (
-                <span className="flex items-center">
-                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Memproses...
-                </span>
-              ) : currentStep < 4 ? 'Selanjutnya' : 'Selesai'}
-            </button>
-          </div>
+              <div className="text-4xl mb-2">{topic.icon}</div>
+              <div className="font-medium">{topic.name}</div>
+            </div>
+          ))}
+        </div>
+        
+        <div className="flex justify-end">
+          <button
+            onClick={handleFinishOnboarding}
+            disabled={loading}
+            className={`px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 ${
+              loading ? 'opacity-70 cursor-not-allowed' : ''
+            }`}
+          >
+            {loading ? 'Memproses...' : 'Selanjutnya'}
+          </button>
         </div>
       </div>
     </div>

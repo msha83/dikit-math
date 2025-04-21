@@ -27,6 +27,8 @@ const Profile = lazy(() => import('./pages/Profile'));
 const Login = lazy(() => import('./pages/Login'));
 const Register = lazy(() => import('./pages/Register'));
 const NotFound = lazy(() => import('./pages/NotFound'));
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
+const ResetPassword = lazy(() => import('./pages/ResetPassword'));
 
 // GeoGebra Tools
 const GeoGebraClassic = lazy(() => import('./pages/tools/Classic'));
@@ -100,7 +102,6 @@ function App() {
               <Route path="/soal" element={<ProtectedRoute><Soal /></ProtectedRoute>} />
               <Route path="/soal/:category/:topic" element={<ProtectedRoute><SoalTopic /></ProtectedRoute>} />
               <Route path="/leaderboard" element={<ProtectedRoute><Leaderboard /></ProtectedRoute>} />
-              <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
               <Route path="/flashcard" element={<ProtectedRoute><Flashcard /></ProtectedRoute>} />
               <Route path="/flashcard/:category/:topic" element={<ProtectedRoute><FlashcardTopic /></ProtectedRoute>} />
               <Route path="/aktivitas" element={<ProtectedRoute><Activity /></ProtectedRoute>} />
@@ -112,9 +113,12 @@ function App() {
               <Route path="/tools/geometry" element={<ProtectedRoute><GeometryApp /></ProtectedRoute>} />
               
               {/* Public Routes */}
+              <Route path="/" element={<HomeRedirect />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
-              <Route path="/" element={<HomeRedirect />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/onboarding" element={<Onboarding />} />
               
               {/* 404 Route */}
               <Route path="*" element={<NotFound />} />

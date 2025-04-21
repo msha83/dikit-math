@@ -144,9 +144,13 @@ const Login = () => {
         localStorage.setItem('user', JSON.stringify(userData));
         
         // Check if user has completed onboarding
-        if (userData.onboarded) {
+        const userPreferences = localStorage.getItem(`userPreferences_${data.user.id}`);
+        
+        if (userPreferences) {
+          // Pengguna sudah pernah onboarding, arahkan ke dashboard
           navigate('/dashboard');
         } else {
+          // Pengguna belum onboarding, arahkan ke halaman onboarding
           navigate('/onboarding');
         }
       }

@@ -1,11 +1,53 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Component } from 'react';
 import { Link } from 'react-router-dom';
+
+// Error Boundary untuk menangkap error dari GeoGebra
+class GeoGebraErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error("GeoGebra error:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-6 bg-white rounded-lg text-center">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-red-500 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Terjadi Kesalahan pada Kalkulator</h3>
+          <p className="text-gray-600 mb-4">Kalkulator grafik tidak dapat dimuat dengan benar.</p>
+          <button
+            onClick={() => {
+              this.setState({ hasError: false });
+              window.location.reload();
+            }}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-150"
+          >
+            Muat Ulang
+          </button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 const GraphCalculator = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const appRef = useRef(null);
   const iframeRef = useRef(null);
+  const containerRef = useRef(null);
   
   useEffect(() => {
     // Function to load GeoGebra script
@@ -52,8 +94,8 @@ const GraphCalculator = () => {
         enableShiftDragZoom: true,
         enableRightClick: true,
         showZoomButtons: true,
-        errorDialogsActive: true,
-        useBrowserForJS: true,
+        errorDialogsActive: false, // Disable error dialogs
+        useBrowserForJS: false, // Use iframe for better isolation
         allowStyleBar: true,
         preventFocus: false,
         showLogging: false,
@@ -67,7 +109,35 @@ const GraphCalculator = () => {
       // Create and inject applet
       const applet = new window.GGBApplet(parameters, true);
       appRef.current = applet;
-      applet.inject('geogebra-container');
+      
+      // Make sure container is empty before injecting
+      const container = document.getElementById('geogebra-container');
+      if (container && container.childNodes.length > 0) {
+        // Only remove applet-related nodes, not the loading indicator
+        Array.from(container.childNodes).forEach(node => {
+          if (node.tagName === 'ARTICLE' || 
+              node.tagName === 'IFRAME' || 
+              node.id === 'ggbApplet' || 
+              node.id === 'ggbApplet_loading') {
+            try {
+              container.removeChild(node);
+            } catch (e) {
+              console.warn('Could not remove child node:', e);
+            }
+          }
+        });
+      }
+      
+      // Delay injection slightly to ensure DOM is ready
+      setTimeout(() => {
+        try {
+          applet.inject('geogebra-container');
+        } catch (e) {
+          console.error('Error injecting GeoGebra:', e);
+          setError('Gagal memuat kalkulator. Silakan muat ulang halaman.');
+          setIsLoading(false);
+        }
+      }, 100);
     };
 
     // Load the GeoGebra script when the component mounts
@@ -85,6 +155,29 @@ const GraphCalculator = () => {
     // Clean up
     return () => {
       window.removeEventListener('resize', handleResize);
+      
+      // Proper cleanup for GeoGebra
+      try {
+        // Remove GeoGebra applet
+        if (window.ggbApplet) {
+          window.ggbApplet = null;
+        }
+        
+        // Clear container
+        const container = document.getElementById('geogebra-container');
+        if (container) {
+          const appletElements = container.querySelectorAll('article, iframe, #ggbApplet, #ggbApplet_loading');
+          appletElements.forEach(el => {
+            try {
+              container.removeChild(el);
+            } catch (e) {
+              console.warn('Error during cleanup:', e);
+            }
+          });
+        }
+      } catch (e) {
+        console.error('Error during GeoGebra cleanup:', e);
+      }
     };
   }, []);
 
@@ -114,11 +207,11 @@ const GraphCalculator = () => {
 
   // Save current state
   const saveState = () => {
-    if (!appRef.current) return;
+    if (!window.ggbApplet) return;
     
     try {
       // Get GeoGebra base64 string
-      const state = appRef.current.getBase64();
+      const state = window.ggbApplet.getBase64();
       // Create a temporary link to download the file
       const element = document.createElement('a');
       element.setAttribute('href', `data:application/vnd.geogebra.file;base64,${state}`);
@@ -170,35 +263,37 @@ const GraphCalculator = () => {
         </div>
 
         {/* GeoGebra Container */}
-        <div 
-          id="geogebra-container" 
-          className="bg-white border border-gray-200 rounded-b-lg relative overflow-hidden"
-          style={{ minHeight: '500px' }}
-          ref={iframeRef}
-        >
-          {isLoading && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-white">
-              <div className="w-16 h-16 border-t-4 border-b-4 border-blue-500 rounded-full animate-spin"></div>
-              <p className="mt-4 text-gray-600 text-sm">Memuat Kalkulator Grafik...</p>
-            </div>
-          )}
-          
-          {error && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-white p-6 text-center">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-red-500 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Terjadi Kesalahan</h3>
-              <p className="text-gray-600 mb-4">{error}</p>
-              <button
-                onClick={() => window.location.reload()}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-150"
-              >
-                Coba Lagi
-              </button>
-            </div>
-          )}
-        </div>
+        <GeoGebraErrorBoundary>
+          <div 
+            id="geogebra-container" 
+            className="bg-white border border-gray-200 rounded-b-lg relative overflow-hidden"
+            style={{ minHeight: '500px' }}
+            ref={(el) => { iframeRef.current = el; containerRef.current = el; }}
+          >
+            {isLoading && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-white z-10">
+                <div className="w-16 h-16 border-t-4 border-b-4 border-blue-500 rounded-full animate-spin"></div>
+                <p className="mt-4 text-gray-600 text-sm">Memuat Kalkulator Grafik...</p>
+              </div>
+            )}
+            
+            {error && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-white p-6 text-center z-20">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-red-500 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Terjadi Kesalahan</h3>
+                <p className="text-gray-600 mb-4">{error}</p>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-150"
+                >
+                  Coba Lagi
+                </button>
+              </div>
+            )}
+          </div>
+        </GeoGebraErrorBoundary>
 
         {/* Tips */}
         <div className="mt-4 bg-white shadow-sm rounded-lg p-4">
