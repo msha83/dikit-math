@@ -37,7 +37,7 @@ const Register = lazy(() => import('./pages/Register'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
 const ResetPassword = lazy(() => import('./pages/ResetPassword'));
-const AdminDashboard = lazy(() => import("./pages/admin/dashboard"));
+const AdminDashboard = lazy(() => import("./pages/admin/Dashboard"));
 const AdminMaterials = lazy(() => import("./pages/admin/Materials"));
 const AdminUsers = lazy(() => import("./pages/admin/Users"));
 const AdminFlashcards = lazy(() => import("./pages/admin/flashcards"));
