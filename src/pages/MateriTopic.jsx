@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import GraphVisualizer from '../components/GraphVisualizer';
+import { supabase } from '../config/supabase';
 
 const MateriTopic = () => {
   const { category, topic } = useParams();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [content, setContent] = useState(null);
   const [activeVideo, setActiveVideo] = useState(null);
@@ -21,231 +23,279 @@ const MateriTopic = () => {
   useEffect(() => {
     console.log("Loading topic:", topic, "category:", category);
     
-    // Reset states when changing topics
-    setLoading(true);
-    setError(null);
-    setActiveVideo(null);
+    // Coba cari materi dengan slug yang sesuai dan redirect
+    const findAndRedirectToNewURL = async () => {
+      try {
+        // Find material with matching slug
+        const { data, error } = await supabase
+          .from('materials')
+          .select('id, slug')
+          .eq('slug', topic)
+          .single();
+          
+        if (data && data.slug) {
+          // Redirect to the new URL format
+          navigate(`/material/${data.slug}`, { replace: true });
+          return true;
+        }
+        
+        // If not found by exact slug, try to find similar materials
+        const { data: similarData, error: similarError } = await supabase
+          .from('materials')
+          .select('id, slug, title')
+          .ilike('slug', `%${topic}%`)
+          .limit(1);
+          
+        if (similarData && similarData.length > 0) {
+          // Redirect to similar material
+          navigate(`/material/${similarData[0].slug}`, { replace: true });
+          return true;
+        }
+        
+        return false;
+      } catch (err) {
+        console.error("Error finding material:", err);
+        return false;
+      }
+    };
     
-    try {
-      // Simulate loading data from an API
-      setTimeout(() => {
-        // Dummy data based on topic
-        let topicContent = {};
-        
-        if (topic === 'persamaan-linear') {
-          topicContent = {
-            title: 'Persamaan Linear',
-            sections: [
-              {
-                title: 'Pengertian Persamaan Linear',
-                content: 'Persamaan linear adalah persamaan aljabar di mana setiap suku mengandung variabel dengan pangkat tertinggi satu. Bentuk umum persamaan linear satu variabel adalah ax + b = 0, di mana a dan b adalah konstanta dan a ≠ 0.'
-              },
-              {
-                title: 'Prinsip Kesetaraan',
-                content: 'Persamaan linear mengikuti prinsip kesetaraan, di mana operasi yang sama pada kedua sisi persamaan akan menghasilkan persamaan yang setara. Operasi yang diperbolehkan meliputi penjumlahan, pengurangan, perkalian, dan pembagian (kecuali dengan nol).'
-              },
-              {
-                title: 'Langkah-langkah Penyelesaian',
-                content: 'Untuk menyelesaikan persamaan linear satu variabel: 1) Sederhanakan kedua sisi persamaan, 2) Kumpulkan suku dengan variabel di satu sisi, 3) Kumpulkan suku konstanta di sisi lain, 4) Bagi kedua sisi dengan koefisien variabel.'
-              },
-              {
-                title: 'Contoh Soal',
-                examples: [
-                  {
-                    problem: '2x + 3 = 7',
-                    solution: [
-                      '2x + 3 = 7',
-                      '2x = 7 - 3',
-                      '2x = 4',
-                      'x = 2'
-                    ]
-                  },
-                  {
-                    problem: '3(x - 1) = 2x + 4',
-                    solution: [
-                      '3(x - 1) = 2x + 4',
-                      '3x - 3 = 2x + 4',
-                      '3x - 2x = 4 + 3',
-                      'x = 7'
-                    ]
-                  }
-                ]
-              }
-            ],
-            videos: [
-              { 
-                id: 'video-linear-1',
-                title: 'Cara Menyelesaikan Persamaan Linear',
-                thumbnail: 'https://img.youtube.com/vi/placeholder1/mqdefault.jpg',
-                videoId: 'placeholder1',
-                duration: '10:25',
-                tags: ['Penyelesaian', 'Dasar']
-              },
-              { 
-                id: 'video-linear-2',
-                title: 'Persamaan Linear dalam Kehidupan Sehari-hari',
-                thumbnail: 'https://img.youtube.com/vi/placeholder2/mqdefault.jpg',
-                videoId: 'placeholder2',
-                duration: '8:15',
-                tags: ['Aplikasi', 'Contoh Soal']
-              },
-              { 
-                id: 'video-linear-3',
-                title: 'Konsep Persamaan Linear',
-                thumbnail: 'https://img.youtube.com/vi/placeholder3/mqdefault.jpg',
-                videoId: 'placeholder3',
-                duration: '12:40',
-                tags: ['Konsep', 'Teori']
-              }
-            ]
-          };
-        } else if (topic === 'persamaan-kuadrat') {
-          topicContent = {
-            title: 'Persamaan Kuadrat',
-            sections: [
-              {
-                title: 'Pengertian Persamaan Kuadrat',
-                content: 'Persamaan kuadrat adalah persamaan polinomial berderajat dua. Bentuk umum persamaan kuadrat adalah ax² + bx + c = 0, di mana a, b, dan c adalah konstanta dan a ≠ 0.'
-              },
-              {
-                title: 'Metode Penyelesaian',
-                content: 'Persamaan kuadrat dapat diselesaikan dengan beberapa metode: 1) Faktorisasi, 2) Rumus kuadratik, 3) Melengkapkan kuadrat sempurna.'
-              },
-              {
-                title: 'Rumus Kuadratik',
-                content: 'Untuk persamaan ax² + bx + c = 0, rumus kuadratik menyatakan bahwa x = (-b ± √(b² - 4ac)) / 2a. Diskriminan, b² - 4ac, menentukan tipe akar persamaan.'
-              },
-              {
-                title: 'Contoh Soal',
-                examples: [
-                  {
-                    problem: 'x² - 5x + 6 = 0',
-                    solution: [
-                      'x² - 5x + 6 = 0',
-                      '(x - 2)(x - 3) = 0',
-                      'x = 2 atau x = 3'
-                    ]
-                  },
-                  {
-                    problem: '2x² + x - 3 = 0',
-                    solution: [
-                      '2x² + x - 3 = 0',
-                      'a = 2, b = 1, c = -3',
-                      'x = (-1 ± √(1 + 24)) / 4',
-                      'x = (-1 ± 5) / 4',
-                      'x = 1 atau x = -3/2'
-                    ]
-                  }
-                ]
-              }
-            ],
-            videos: [
-              { 
-                id: 'video-kuadrat-1',
-                title: 'Rumus Persamaan Kuadrat',
-                thumbnail: 'https://img.youtube.com/vi/placeholder4/mqdefault.jpg',
-                videoId: 'placeholder4',
-                duration: '9:30',
-                tags: ['Rumus', 'Penyelesaian']
-              },
-              { 
-                id: 'video-kuadrat-2',
-                title: 'Menyelesaikan Persamaan Kuadrat dengan Faktorisasi',
-                thumbnail: 'https://img.youtube.com/vi/placeholder5/mqdefault.jpg',
-                videoId: 'placeholder5',
-                duration: '11:20',
-                tags: ['Faktorisasi', 'Contoh Soal']
-              },
-              { 
-                id: 'video-kuadrat-3',
-                title: 'Aplikasi Persamaan Kuadrat',
-                thumbnail: 'https://img.youtube.com/vi/placeholder6/mqdefault.jpg',
-                videoId: 'placeholder6',
-                duration: '7:45',
-                tags: ['Aplikasi', 'Praktik']
-              }
-            ]
-          };
-        } else if (topic === 'fungsi-dan-grafik') {
-          topicContent = {
-            title: 'Fungsi dan Grafik',
-            sections: [
-              {
-                title: 'Pengertian Fungsi',
-                content: 'Fungsi adalah hubungan khusus antara dua himpunan di mana setiap elemen dalam domain dipetakan ke tepat satu elemen dalam kodomain. Fungsi dapat dinyatakan sebagai f(x) = y, di mana x adalah elemen domain dan y adalah elemen kodomain.'
-              },
-              {
-                title: 'Komponen Fungsi',
-                content: 'Fungsi memiliki tiga komponen utama: 1) Domain (daerah asal): himpunan nilai x yang dimasukkan ke dalam fungsi, 2) Kodomain: himpunan semua nilai y yang mungkin, 3) Range (daerah hasil): himpunan nilai y yang benar-benar dihasilkan dari fungsi.'
-              },
-              {
-                title: 'Jenis-jenis Fungsi',
-                content: 'Beberapa jenis fungsi yang umum adalah: 1) Fungsi linear: f(x) = ax + b, 2) Fungsi kuadrat: f(x) = ax² + bx + c, 3) Fungsi eksponensial: f(x) = aˣ, 4) Fungsi logaritma: f(x) = log_a(x).'
-              },
-              {
-                title: 'Grafik Fungsi',
-                content: 'Grafik fungsi adalah representasi visual dari fungsi pada bidang koordinat. Setiap titik (x, y) pada grafik memenuhi persamaan y = f(x).'
-              },
-              {
-                title: 'Contoh Soal Fungsi Linear',
-                examples: [
-                  {
-                    problem: 'Tentukan persamaan garis yang melalui titik (2, 5) dan memiliki gradien 3.',
-                    solution: [
-                      'Fungsi linear berbentuk f(x) = mx + c',
-                      'Diketahui m = 3 dan titik (2, 5)',
-                      'Substitusi titik ke persamaan: 5 = 3(2) + c',
-                      '5 = 6 + c',
-                      'c = -1',
-                      'Jadi, persamaan garis adalah f(x) = 3x - 1'
-                    ]
-                  }
-                ]
-              }
-            ],
-            videos: [
-              { 
-                id: 'video-fungsi-1',
-                title: 'Pengenalan Fungsi dan Grafik',
-                thumbnail: 'https://img.youtube.com/vi/placeholder7/mqdefault.jpg',
-                videoId: 'placeholder7',
-                duration: '14:30',
-                tags: ['Konsep', 'Dasar']
-              },
-              { 
-                id: 'video-fungsi-2',
-                title: 'Cara Menggambar Grafik Fungsi',
-                thumbnail: 'https://img.youtube.com/vi/placeholder8/mqdefault.jpg',
-                videoId: 'placeholder8',
-                duration: '10:15',
-                tags: ['Praktik', 'Menggambar Grafik']
-              }
-            ]
-          };
-        } else {
-          // Default content for unknown topics
-          setError(`Materi untuk topik "${formatTitle(topic)}" belum tersedia. Silakan pilih topik lain.`);
+    const loadContent = async () => {
+      // Reset states when changing topics
+      setLoading(true);
+      setError(null);
+      setActiveVideo(null);
+      
+      // First try to redirect to new URL format
+      const redirected = await findAndRedirectToNewURL();
+      if (redirected) return;
+      
+      // If redirect failed, load the old static content
+      try {
+        // Simulate loading data from an API
+        setTimeout(() => {
+          // Dummy data based on topic
+          let topicContent = {};
+          
+          if (topic === 'persamaan-linear') {
+            topicContent = {
+              title: 'Persamaan Linear',
+              sections: [
+                {
+                  title: 'Pengertian Persamaan Linear',
+                  content: 'Persamaan linear adalah persamaan aljabar di mana setiap suku mengandung variabel dengan pangkat tertinggi satu. Bentuk umum persamaan linear satu variabel adalah ax + b = 0, di mana a dan b adalah konstanta dan a ≠ 0.'
+                },
+                {
+                  title: 'Prinsip Kesetaraan',
+                  content: 'Persamaan linear mengikuti prinsip kesetaraan, di mana operasi yang sama pada kedua sisi persamaan akan menghasilkan persamaan yang setara. Operasi yang diperbolehkan meliputi penjumlahan, pengurangan, perkalian, dan pembagian (kecuali dengan nol).'
+                },
+                {
+                  title: 'Langkah-langkah Penyelesaian',
+                  content: 'Untuk menyelesaikan persamaan linear satu variabel: 1) Sederhanakan kedua sisi persamaan, 2) Kumpulkan suku dengan variabel di satu sisi, 3) Kumpulkan suku konstanta di sisi lain, 4) Bagi kedua sisi dengan koefisien variabel.'
+                },
+                {
+                  title: 'Contoh Soal',
+                  examples: [
+                    {
+                      problem: '2x + 3 = 7',
+                      solution: [
+                        '2x + 3 = 7',
+                        '2x = 7 - 3',
+                        '2x = 4',
+                        'x = 2'
+                      ]
+                    },
+                    {
+                      problem: '3(x - 1) = 2x + 4',
+                      solution: [
+                        '3(x - 1) = 2x + 4',
+                        '3x - 3 = 2x + 4',
+                        '3x - 2x = 4 + 3',
+                        'x = 7'
+                      ]
+                    }
+                  ]
+                }
+              ],
+              videos: [
+                { 
+                  id: 'video-linear-1',
+                  title: 'Cara Menyelesaikan Persamaan Linear',
+                  thumbnail: 'https://img.youtube.com/vi/placeholder1/mqdefault.jpg',
+                  videoId: 'placeholder1',
+                  duration: '10:25',
+                  tags: ['Penyelesaian', 'Dasar']
+                },
+                { 
+                  id: 'video-linear-2',
+                  title: 'Persamaan Linear dalam Kehidupan Sehari-hari',
+                  thumbnail: 'https://img.youtube.com/vi/placeholder2/mqdefault.jpg',
+                  videoId: 'placeholder2',
+                  duration: '8:15',
+                  tags: ['Aplikasi', 'Contoh Soal']
+                },
+                { 
+                  id: 'video-linear-3',
+                  title: 'Konsep Persamaan Linear',
+                  thumbnail: 'https://img.youtube.com/vi/placeholder3/mqdefault.jpg',
+                  videoId: 'placeholder3',
+                  duration: '12:40',
+                  tags: ['Konsep', 'Teori']
+                }
+              ]
+            };
+          } else if (topic === 'persamaan-kuadrat') {
+            topicContent = {
+              title: 'Persamaan Kuadrat',
+              sections: [
+                {
+                  title: 'Pengertian Persamaan Kuadrat',
+                  content: 'Persamaan kuadrat adalah persamaan polinomial berderajat dua. Bentuk umum persamaan kuadrat adalah ax² + bx + c = 0, di mana a, b, dan c adalah konstanta dan a ≠ 0.'
+                },
+                {
+                  title: 'Metode Penyelesaian',
+                  content: 'Persamaan kuadrat dapat diselesaikan dengan beberapa metode: 1) Faktorisasi, 2) Rumus kuadratik, 3) Melengkapkan kuadrat sempurna.'
+                },
+                {
+                  title: 'Rumus Kuadratik',
+                  content: 'Untuk persamaan ax² + bx + c = 0, rumus kuadratik menyatakan bahwa x = (-b ± √(b² - 4ac)) / 2a. Diskriminan, b² - 4ac, menentukan tipe akar persamaan.'
+                },
+                {
+                  title: 'Contoh Soal',
+                  examples: [
+                    {
+                      problem: 'x² - 5x + 6 = 0',
+                      solution: [
+                        'x² - 5x + 6 = 0',
+                        '(x - 2)(x - 3) = 0',
+                        'x = 2 atau x = 3'
+                      ]
+                    },
+                    {
+                      problem: '2x² + x - 3 = 0',
+                      solution: [
+                        '2x² + x - 3 = 0',
+                        'a = 2, b = 1, c = -3',
+                        'x = (-1 ± √(1 + 24)) / 4',
+                        'x = (-1 ± 5) / 4',
+                        'x = 1 atau x = -3/2'
+                      ]
+                    }
+                  ]
+                }
+              ],
+              videos: [
+                { 
+                  id: 'video-kuadrat-1',
+                  title: 'Rumus Persamaan Kuadrat',
+                  thumbnail: 'https://img.youtube.com/vi/placeholder4/mqdefault.jpg',
+                  videoId: 'placeholder4',
+                  duration: '9:30',
+                  tags: ['Rumus', 'Penyelesaian']
+                },
+                { 
+                  id: 'video-kuadrat-2',
+                  title: 'Menyelesaikan Persamaan Kuadrat dengan Faktorisasi',
+                  thumbnail: 'https://img.youtube.com/vi/placeholder5/mqdefault.jpg',
+                  videoId: 'placeholder5',
+                  duration: '11:20',
+                  tags: ['Faktorisasi', 'Contoh Soal']
+                },
+                { 
+                  id: 'video-kuadrat-3',
+                  title: 'Aplikasi Persamaan Kuadrat',
+                  thumbnail: 'https://img.youtube.com/vi/placeholder6/mqdefault.jpg',
+                  videoId: 'placeholder6',
+                  duration: '7:45',
+                  tags: ['Aplikasi', 'Praktik']
+                }
+              ]
+            };
+          } else if (topic === 'fungsi-dan-grafik') {
+            topicContent = {
+              title: 'Fungsi dan Grafik',
+              sections: [
+                {
+                  title: 'Pengertian Fungsi',
+                  content: 'Fungsi adalah hubungan khusus antara dua himpunan di mana setiap elemen dalam domain dipetakan ke tepat satu elemen dalam kodomain. Fungsi dapat dinyatakan sebagai f(x) = y, di mana x adalah elemen domain dan y adalah elemen kodomain.'
+                },
+                {
+                  title: 'Komponen Fungsi',
+                  content: 'Fungsi memiliki tiga komponen utama: 1) Domain (daerah asal): himpunan nilai x yang dimasukkan ke dalam fungsi, 2) Kodomain: himpunan semua nilai y yang mungkin, 3) Range (daerah hasil): himpunan nilai y yang benar-benar dihasilkan dari fungsi.'
+                },
+                {
+                  title: 'Jenis-jenis Fungsi',
+                  content: 'Beberapa jenis fungsi yang umum adalah: 1) Fungsi linear: f(x) = ax + b, 2) Fungsi kuadrat: f(x) = ax² + bx + c, 3) Fungsi eksponensial: f(x) = aˣ, 4) Fungsi logaritma: f(x) = log_a(x).'
+                },
+                {
+                  title: 'Grafik Fungsi',
+                  content: 'Grafik fungsi adalah representasi visual dari fungsi pada bidang koordinat. Setiap titik (x, y) pada grafik memenuhi persamaan y = f(x).'
+                },
+                {
+                  title: 'Contoh Soal Fungsi Linear',
+                  examples: [
+                    {
+                      problem: 'Tentukan persamaan garis yang melalui titik (2, 5) dan memiliki gradien 3.',
+                      solution: [
+                        'Fungsi linear berbentuk f(x) = mx + c',
+                        'Diketahui m = 3 dan titik (2, 5)',
+                        'Substitusi titik ke persamaan: 5 = 3(2) + c',
+                        '5 = 6 + c',
+                        'c = -1',
+                        'Jadi, persamaan garis adalah f(x) = 3x - 1'
+                      ]
+                    }
+                  ]
+                }
+              ],
+              videos: [
+                { 
+                  id: 'video-fungsi-1',
+                  title: 'Pengenalan Fungsi dan Grafik',
+                  thumbnail: 'https://img.youtube.com/vi/placeholder7/mqdefault.jpg',
+                  videoId: 'placeholder7',
+                  duration: '14:30',
+                  tags: ['Konsep', 'Dasar']
+                },
+                { 
+                  id: 'video-fungsi-2',
+                  title: 'Cara Menggambar Grafik Fungsi',
+                  thumbnail: 'https://img.youtube.com/vi/placeholder8/mqdefault.jpg',
+                  videoId: 'placeholder8',
+                  duration: '10:15',
+                  tags: ['Praktik', 'Menggambar Grafik']
+                }
+              ]
+            };
+          } else {
+            // Default content for unknown topics
+            setError(`Materi untuk topik "${formatTitle(topic)}" belum tersedia. Silakan pilih topik lain.`);
+            setLoading(false);
+            return;
+          }
+          
+          // Set the active video to the first video if available
+          if (topicContent.videos && topicContent.videos.length > 0) {
+            setActiveVideo(topicContent.videos[0]);
+          }
+          
+          setContent(topicContent);
           setLoading(false);
-          return;
-        }
-        
-        // Set the active video to the first video if available
-        if (topicContent.videos && topicContent.videos.length > 0) {
-          setActiveVideo(topicContent.videos[0]);
-        }
-        
-        setContent(topicContent);
+          
+          // Show notice about new format
+          setError(`Materi ini akan segera tersedia dalam format baru. Silakan kunjungi halaman "Konten Matematika" untuk melihat materi terbaru.`);
+        }, 800);
+      } catch (err) {
+        console.error("Error loading topic content:", err);
+        setError("Terjadi kesalahan saat memuat materi. Silakan coba lagi nanti.");
         setLoading(false);
-      }, 800);
-    } catch (err) {
-      console.error("Error loading topic content:", err);
-      setError("Terjadi kesalahan saat memuat materi. Silakan coba lagi nanti.");
-      setLoading(false);
-    }
+      }
+    };
+    
+    loadContent();
     
     // Scroll to top when changing topics
     window.scrollTo(0, 0);
-  }, [topic, category]);
+  }, [topic, category, navigate]);
 
   const handleVideoSelect = (video) => {
     setActiveVideo(video);
@@ -310,7 +360,36 @@ const MateriTopic = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <div className="container mx-auto px-4 py-8">
+      <div className="mb-6">
+        <Link to="/materi" className="text-blue-600 hover:underline flex items-center">
+          <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+          </svg>
+          Kembali ke Materi
+        </Link>
+      </div>
+      
+      {/* Notice about new format */}
+      <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6">
+        <div className="flex">
+          <div className="flex-shrink-0">
+            <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+            </svg>
+          </div>
+          <div className="ml-3">
+            <p className="text-sm text-blue-700">
+              Kami telah memperbarui format materi. Silakan kunjungi{' '}
+              <Link to="/materials" className="font-medium underline">
+                Konten Matematika
+              </Link>{' '}
+              untuk melihat materi terbaru.
+            </p>
+          </div>
+        </div>
+      </div>
+      
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Breadcrumb dan Navigasi */}
         <div className="mb-6">

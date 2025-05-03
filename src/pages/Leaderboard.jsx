@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
-import { supabase } from '../config/supabase';
+import { supabase, getLeaderboard, updateUserScore, subscribeToLeaderboardUpdates } from '../config/supabase';
 
 // Fallback/sample leaderboard data
 const sampleLeaderboardData = [
@@ -37,7 +37,7 @@ const UserRow = React.memo(({ user, isCurrentUser }) => (
     </td>
     <td className="px-6 py-4 whitespace-nowrap">
       <div className="text-sm font-medium text-gray-900 flex items-center">
-        {user.username}
+        {user.username || user.name || 'Pengguna'}
         {isCurrentUser && (
           <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
             Anda
@@ -89,46 +89,16 @@ const Leaderboard = () => {
       // Get user progress from localStorage
       const userProgressData = JSON.parse(localStorage.getItem('userProgress') || '{}');
       
-      // Check if user exists in leaderboard
-      const { data: existingUser, error: checkError } = await supabase
-        .from('leaderboard')
-        .select('*')
-        .eq('user_id', currentUserData.id)
-        .single();
-        
-      if (checkError && checkError.code !== 'PGRST116') {
-        console.error('Error checking leaderboard entry:', checkError);
-        return;
-      }
+      // Update user score in leaderboard
+      const { error } = await updateUserScore(
+        currentUserData.id,
+        currentUserData.name || (currentUserData.email && currentUserData.email.split('@')[0]) || 'User',
+        userProgressData.xpPoints || 0,
+        false // not incrementing, setting absolute value
+      );
       
-      if (existingUser) {
-        // Update existing entry
-        const { error: updateError } = await supabase
-          .from('leaderboard')
-          .update({
-            username: currentUserData.name || (currentUserData.email && currentUserData.email.split('@')[0]) || 'User',
-            score: userProgressData.xpPoints || 0,
-            last_updated: new Date().toISOString()
-          })
-          .eq('user_id', currentUserData.id);
-          
-        if (updateError) {
-          console.error('Error updating leaderboard:', updateError);
-        }
-      } else {
-        // Create new entry
-        const { error: insertError } = await supabase
-          .from('leaderboard')
-          .insert([{
-            user_id: currentUserData.id,
-            username: currentUserData.name || (currentUserData.email && currentUserData.email.split('@')[0]) || 'User',
-            score: userProgressData.xpPoints || 0,
-            last_updated: new Date().toISOString()
-          }]);
-          
-        if (insertError) {
-          console.error('Error creating leaderboard entry:', insertError);
-        }
+      if (error) {
+        console.error('Error syncing user progress:', error);
       }
     } catch (error) {
       console.error('Error syncing user to Supabase:', error);
@@ -181,42 +151,6 @@ const Leaderboard = () => {
     }
   }, []);
 
-  // Function to add random XP to current user (for testing)
-  const addRandomXp = useCallback(async () => {
-    if (!currentUser || !currentUser.id) return;
-    
-    try {
-      // Get user progress from localStorage
-      const userProgress = JSON.parse(localStorage.getItem('userProgress') || '{}');
-      
-      // Add random XP between 10-50
-      const randomXp = Math.floor(Math.random() * 41) + 10;
-      const newXpPoints = (userProgress.xpPoints || 0) + randomXp;
-      
-      // Update localStorage
-      userProgress.xpPoints = newXpPoints;
-      localStorage.setItem('userProgress', JSON.stringify(userProgress));
-      
-      // Update Supabase
-      const { error } = await supabase
-        .from('leaderboard')
-        .update({
-          score: newXpPoints,
-          last_updated: new Date().toISOString()
-        })
-        .eq('user_id', currentUser.id);
-        
-      if (error) {
-        console.error('Error updating leaderboard score:', error);
-      }
-      
-      // Refresh local data
-      syncUserProgressToSupabase();
-    } catch (error) {
-      console.error('Error adding random XP:', error);
-    }
-  }, [currentUser, syncUserProgressToSupabase]);
-
   // Effect to load data with pagination
   useEffect(() => {
     const loadLeaderboardData = async () => {
@@ -231,46 +165,62 @@ const Leaderboard = () => {
           // Sync local user data to Supabase on mount
           await syncUserProgressToSupabase();
           
-          // Calculate pagination
-          const from = (page - 1) * usersPerPage;
-          const to = from + usersPerPage - 1;
+          // Create leaderboard table if it doesn't exist
+          const createLeaderboardTable = async () => {
+            try {
+              // Check if the table exists first
+              const { error: checkError } = await supabase
+                .from('leaderboard')
+                .select('count', { count: 'exact', head: true });
+              
+              if (checkError && checkError.code === '42P01') {
+                console.log('Creating leaderboard table...');
+                // In a real app, you would use migrations for this
+                // This is just a demo/test approach
+                const { error } = await supabase.rpc('create_leaderboard_table');
+                if (error) {
+                  console.error('Error creating leaderboard table:', error);
+                  return false;
+                }
+                return true;
+              }
+              return true;
+            } catch (error) {
+              console.error('Error checking/creating leaderboard table:', error);
+              return false;
+            }
+          };
           
-          // Get total count
-          const { count, error: countError } = await supabase
-            .from('leaderboard')
-            .select('*', { count: 'exact', head: true });
-            
-          if (countError) {
-            throw countError;
-          }
-          
-          setTotalUsers(count || 0);
+          // Try to ensure the leaderboard table exists
+          await createLeaderboardTable();
           
           // Get leaderboard data with pagination
-          const { data, error } = await supabase
-            .from('leaderboard')
-            .select('*')
-            .order('score', { ascending: false })
-            .range(from, to);
-            
+          const { data, count, error, usingSampleData: isSampleData } = await getLeaderboard(page, usersPerPage);
+          
           if (error) {
-            throw error;
+            throw new Error(error);
           }
           
           if (data && data.length > 0) {
-            // Add rank to each user
-            const rankedData = data.map((user, index) => ({
+            // Make sure each user has a username property for consistency
+            const processedData = data.map(user => ({
               ...user,
-              rank: from + index + 1
+              username: user.name || user.username || 'Pengguna'
             }));
-            
-            setUsers(rankedData);
-            setUsingSampleData(false);
-          } else {
+            setUsers(processedData);
+            setTotalUsers(count || 0);
+            setUsingSampleData(isSampleData);
+          } else if (isSampleData) {
             // No data or error, use sample data
             const customizedSampleData = addCurrentUserToSampleData();
             setUsers(customizedSampleData);
+            setTotalUsers(customizedSampleData.length);
             setUsingSampleData(true);
+          } else {
+            // Empty but valid leaderboard
+            setUsers([]);
+            setTotalUsers(0);
+            setUsingSampleData(false);
           }
         } catch (error) {
           console.error('Error fetching leaderboard data:', error);
@@ -293,33 +243,27 @@ const Leaderboard = () => {
     
     loadLeaderboardData();
     
-    // Set up a real-time subscription to leaderboard updates
-    const subscribeToLeaderboard = async () => {
-      const subscription = supabase
-        .channel('leaderboard-changes')
-        .on('postgres_changes', 
-          { 
-            event: '*', 
-            schema: 'public', 
-            table: 'leaderboard' 
-          }, 
-          (payload) => {
-            // Refresh data when changes occur
-            loadLeaderboardData();
-          }
-        )
-        .subscribe();
-        
-      return () => {
-        supabase.removeChannel(subscription);
-      };
-    };
+    /* Real-time subscription disabled to fix refresh issues
+    // Store subscription reference to properly clean up
+    let subscriptionRef = null;
     
-    const unsubscribe = subscribeToLeaderboard();
+    // Only set up subscription if not using sample data
+    if (!usingSampleData) {
+      subscriptionRef = subscribeToLeaderboardUpdates(() => {
+        // Only reload data if component is still mounted and not already loading
+        if (!loading) {
+          loadLeaderboardData();
+        }
+      });
+    }
     
+    // Clean up subscription when unmounting or dependencies change
     return () => {
-      if (unsubscribe) unsubscribe();
+      if (subscriptionRef) {
+        supabase.removeChannel(subscriptionRef);
+      }
     };
+    */
   }, [page, syncUserProgressToSupabase, addCurrentUserToSampleData]);
 
   const handleStorageChange = (e) => {
@@ -401,168 +345,123 @@ const Leaderboard = () => {
   }, [users, currentUser]);
 
   return (
-    <div className="bg-gray-50 min-h-screen py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-6xl mx-auto">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Papan Peringkat</h1>
-          <p className="mt-2 text-gray-600">
-            {usingSampleData ? 
-              'Menggunakan data contoh karena database tidak tersedia.' : 
-              'Peringkat berdasarkan perolehan XP'
-            }
-          </p>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <div className="text-center mb-8">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Papan Peringkat</h1>
+        <p className="text-lg text-gray-600">
+          {usingSampleData 
+            ? 'Menggunakan data sampel (Server belum tersedia)'
+            : 'Peringkat berdasarkan perolehan XP'
+          }
+        </p>
+      </div>
+      
+      <div className="bg-white shadow-md rounded-lg overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Peringkat
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Nama
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <p className="text-gray-500">XP</p>
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {loading ? (
+                // Skeleton loading
+                Array(8).fill().map((_, i) => <SkeletonRow key={i} />)
+              ) : error ? (
+                <tr>
+                  <td colSpan="3" className="px-6 py-4 text-center text-red-500">
+                    Error: {error}
+                  </td>
+                </tr>
+              ) : users.length === 0 ? (
+                <tr>
+                  <td colSpan="3" className="px-6 py-4 text-center text-gray-500">
+                    Belum ada data untuk ditampilkan
+                  </td>
+                </tr>
+              ) : (
+                // Display users
+                users.map(user => {
+                  const userId = user.user_id || user.id;
+                  const isCurrentUserRow = currentUser && userId === currentUser.id;
+                  
+                  return (
+                    <UserRow 
+                    key={`user-${userId}`} // Add a prefix to ensure uniqueness
+                    user={user} 
+                    isCurrentUser={isCurrentUserRow}
+                    />
+                  );
+                })
+              )}
+            </tbody>
+          </table>
         </div>
         
-        {/* Current user card */}
-        {currentUser && currentUserData && (
-          <div className="bg-white shadow-lg rounded-lg p-6 mb-8 border-l-4 border-blue-500">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <div className={`flex-shrink-0 h-12 w-12 rounded-full flex items-center justify-center text-xl font-bold ${
-                  currentUserData.rank === 1 
-                    ? 'bg-yellow-100 text-yellow-800' 
-                    : currentUserData.rank === 2 
-                    ? 'bg-gray-100 text-gray-800' 
-                    : currentUserData.rank === 3 
-                    ? 'bg-yellow-600 text-white' 
-                    : 'bg-blue-100 text-blue-800'
-                }`}>
-                  {currentUserData.rank || '?'}
-                </div>
-                <div className="ml-4">
-                  <h2 className="text-xl font-semibold text-gray-900">{currentUser.name || 'User'}</h2>
-                  <p className="text-gray-500">Peringkat Saat Ini</p>
-                </div>
+        {/* Pagination controls */}
+        {totalPages > 1 && (
+          <div className="px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+            <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm text-gray-700">
+                  Menampilkan <span className="font-medium">{(page - 1) * usersPerPage + 1}</span> hingga <span className="font-medium">{Math.min(page * usersPerPage, totalUsers)}</span> dari <span className="font-medium">{totalUsers}</span> pengguna
+                </p>
               </div>
-              <div className="text-center">
-                <div className="text-3xl font-bold text-gray-900">{currentUserData.score || 0}</div>
-                <p className="text-gray-500">XP</p>
+              <div>
+                <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                  <button
+                    onClick={handlePreviousPage}
+                    disabled={page === 1}
+                    className={`relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium ${
+                      page === 1 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:bg-gray-50'
+                    }`}
+                  >
+                    <span className="sr-only">Previous</span>
+                    <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                      <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                  
+                  {pageNumbers.map(number => (
+                    <button
+                      key={number}
+                      onClick={() => setPage(number)}
+                      className={`relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium ${
+                        page === number 
+                          ? 'z-10 bg-blue-50 border-blue-500 text-blue-600' 
+                          : 'text-gray-500 hover:bg-gray-50'
+                      }`}
+                    >
+                      {number}
+                    </button>
+                  ))}
+                  
+                  <button
+                    onClick={handleNextPage}
+                    disabled={page === totalPages}
+                    className={`relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium ${
+                      page === totalPages ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:bg-gray-50'
+                    }`}
+                  >
+                    <span className="sr-only">Next</span>
+                    <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                      <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                </nav>
               </div>
-              {!usingSampleData && (
-                <button 
-                  onClick={addRandomXp} 
-                  className="ml-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  +XP (Test)
-                </button>
-              )}
             </div>
           </div>
         )}
-        
-        {/* Leaderboard table */}
-        <div className="bg-white shadow-lg rounded-lg overflow-hidden">
-          <div className="px-4 py-5 sm:px-6 bg-gray-50 border-b border-gray-200">
-            <h3 className="text-lg leading-6 font-medium text-gray-900">
-              {usingSampleData ? 'Contoh Papan Peringkat' : 'Peringkat Global'}
-            </h3>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Peringkat
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Pengguna
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Skor
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {loading ? (
-                  // Skeleton loading
-                  Array(8).fill().map((_, i) => <SkeletonRow key={i} />)
-                ) : error ? (
-                  <tr>
-                    <td colSpan="3" className="px-6 py-4 text-center text-red-500">
-                      Error: {error}
-                    </td>
-                  </tr>
-                ) : users.length === 0 ? (
-                  <tr>
-                    <td colSpan="3" className="px-6 py-4 text-center text-gray-500">
-                      Belum ada data untuk ditampilkan
-                    </td>
-                  </tr>
-                ) : (
-                  // Display users
-                  users.map(user => {
-                    const userId = user.user_id || user.id;
-                    const isCurrentUserRow = currentUser && userId === currentUser.id;
-                    
-                    return (
-                      <UserRow 
-                        key={userId} 
-                        user={user} 
-                        isCurrentUser={isCurrentUserRow} 
-                      />
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-          
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
-              <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-sm text-gray-700">
-                    Menampilkan <span className="font-medium">{(page - 1) * usersPerPage + 1}</span> hingga <span className="font-medium">{Math.min(page * usersPerPage, totalUsers)}</span> dari <span className="font-medium">{totalUsers}</span> pengguna
-                  </p>
-                </div>
-                <div>
-                  <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
-                    <button
-                      onClick={handlePreviousPage}
-                      disabled={page === 1}
-                      className={`relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium ${
-                        page === 1 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:bg-gray-50'
-                      }`}
-                    >
-                      <span className="sr-only">Previous</span>
-                      <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                        <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
-                      </svg>
-                    </button>
-                    
-                    {pageNumbers.map(number => (
-                      <button
-                        key={number}
-                        onClick={() => setPage(number)}
-                        className={`relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium ${
-                          page === number 
-                            ? 'z-10 bg-blue-50 border-blue-500 text-blue-600' 
-                            : 'text-gray-500 hover:bg-gray-50'
-                        }`}
-                      >
-                        {number}
-                      </button>
-                    ))}
-                    
-                    <button
-                      onClick={handleNextPage}
-                      disabled={page === totalPages}
-                      className={`relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium ${
-                        page === totalPages ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:bg-gray-50'
-                      }`}
-                    >
-                      <span className="sr-only">Next</span>
-                      <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                        <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                      </svg>
-                    </button>
-                  </nav>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );

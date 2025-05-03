@@ -7,7 +7,7 @@ const Footer = () => {
       <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           <div>
-            <h3 className="text-lg font-semibold mb-4">MathEdu SMA</h3>
+            <h3 className="text-lg font-semibold mb-4">MathMax SMA</h3>
             <p className="text-gray-300 text-sm">
               Platform edukasi matematika SMA yang interaktif dan menyenangkan. Belajar dengan materi berkualitas, latihan soal, dan fitur personalisasi.
             </p>
@@ -32,7 +32,7 @@ const Footer = () => {
           </div>
         </div>
         <div className="border-t border-gray-700 mt-8 pt-6 flex flex-col md:flex-row justify-between items-center">
-          <p className="text-sm text-gray-400">&copy; {new Date().getFullYear()} MathEdu SMA. All rights reserved.</p>
+          <p className="text-sm text-gray-400">&copy; {new Date().getFullYear()} MathMax SMA. All rights reserved.</p>
           <div className="mt-4 md:mt-0 flex space-x-6">
             <a href="#" className="text-gray-400 hover:text-blue-300 transition">
               <span className="sr-only">Facebook</span>

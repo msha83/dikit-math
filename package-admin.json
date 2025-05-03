@@ -1,0 +1,13 @@
+{
+  "name": "dikit-add-admin",
+  "version": "1.0.0",
+  "description": "Script untuk menambahkan user admin di aplikasi DiKit",
+  "main": "add-admin-simple.js",
+  "type": "module",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.0.0"
+  },
+  "scripts": {
+    "add-admin": "node add-admin-simple.js"
+  }
+} 

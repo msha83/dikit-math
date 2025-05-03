@@ -11,7 +11,7 @@ const ResetPassword = () => {
   const [isSuccess, setIsSuccess] = useState(false);
   const [isValidHash, setIsValidHash] = useState(false);
 
-  // Verify hash parameter in URL on component mount
+  // Verifikasi hash parameter di URL saat komponen dimuat
   useEffect(() => {
     const hash = window.location.hash;
     if (hash && hash.includes('type=recovery')) {
@@ -58,7 +58,7 @@ const ResetPassword = () => {
       setIsSuccess(true);
       setMessage('Password berhasil diubah! Anda akan diarahkan ke halaman login.');
       
-      // Redirect to login page after a delay
+      // Arahkan ke halaman login setelah beberapa detik
       setTimeout(() => {
         navigate('/login');
       }, 3000);
@@ -159,4 +159,4 @@ const ResetPassword = () => {
   );
 };
 
-export default ResetPassword; 
+export default ResetPassword;

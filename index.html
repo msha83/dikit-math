@@ -3,12 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="DiKit - Platform belajar matematika interaktif dengan materi dan latihan soal yang dipersonalisasi untuk meningkatkan kemampuan matematika Anda" />
+    <meta name="description" content="MathMax - Platform belajar matematika interaktif dengan materi dan latihan soal yang dipersonalisasi untuk meningkatkan kemampuan matematika Anda" />
     <meta name="keywords" content="matematika, belajar matematika, latihan soal matematika, pembelajaran interaktif" />
     <meta name="theme-color" content="#4F46E5" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="MathEdu" />
+    <meta name="apple-mobile-web-app-title" content="MathMax" />
     <meta name="format-detection" content="telephone=no" />
     <meta name="mobile-web-app-capable" content="yes" />
     
@@ -33,6 +33,36 @@
       media="print" 
       onload="this.media='all'" 
     />
+    
+    <!-- Custom CSS for fixing UI issues -->
+    <style>
+      /* Hide UUID IDs in the material page */
+      [id*="7715b4c8-26c8-46e1-8239-e44a9b9d6c6b"],
+      [class*="7715b4c8-26c8-46e1-8239-e44a9b9d6c6b"],
+      /* Match partial UUIDs to catch dynamic IDs */
+      [id^="7715b4c8-"],
+      [class^="7715b4c8-"],
+      /* Hide other UUIDs with similar patterns */
+      [id^="uuid-"],
+      [class^="uuid-"] {
+        display: none !important;
+      }
+      
+      /* Hide specific text node containing the UUID by content */
+      body *:contains("7715b4c8-26c8-46e1-8239-e44a9b9d6c6b") {
+        font-size: 0 !important;
+      }
+      body *:contains("7715b4c8-26c8-46e1-8239-e44a9b9d6c6b")::before {
+        content: "";
+        font-size: initial;
+      }
+      
+      /* Hide Konten Matematika in navbar as it's redundant with Materi */
+      a[href="/materials"],
+      a[href^="/materials/"] {
+        display: none !important;
+      }
+    </style>
     
     <!-- Enhanced redirect handler from 404 page -->
     <script>
@@ -67,7 +97,49 @@
       })();
     </script>
     
-    <title>DiKit - Platform Pembelajaran Matematika Interaktif</title>
+    <!-- Additional script to handle UUID hiding -->
+    <script>
+      // Run after DOM is fully loaded
+      document.addEventListener('DOMContentLoaded', function() {
+        // Function to remove UUID elements
+        function hideUUIDs() {
+          // Find text nodes containing the UUID
+          const walker = document.createTreeWalker(
+            document.body,
+            NodeFilter.SHOW_TEXT,
+            null,
+            false
+          );
+          
+          const nodesToRemove = [];
+          let node;
+          
+          while(node = walker.nextNode()) {
+            if (node.nodeValue && node.nodeValue.includes("7715b4c8-26c8-46e1-8239-e44a9b9d6c6b")) {
+              nodesToRemove.push(node);
+            }
+          }
+          
+          // Remove the found nodes
+          nodesToRemove.forEach(node => {
+            node.nodeValue = "";
+          });
+        }
+        
+        // Run immediately and then on any DOM changes
+        hideUUIDs();
+        
+        // Set up a mutation observer to handle dynamic content
+        const observer = new MutationObserver(hideUUIDs);
+        observer.observe(document.body, { 
+          childList: true, 
+          subtree: true,
+          characterData: true
+        });
+      });
+    </script>
+    
+    <title>MathMax - Platform Pembelajaran Matematika Interaktif</title>
   </head>
   <body class="font-inter">
     <div id="root"></div>

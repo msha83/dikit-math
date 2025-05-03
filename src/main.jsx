@@ -52,14 +52,11 @@ optimizeInitialLoad();
 // Create root element
 const root = ReactDOM.createRoot(document.getElementById('root'));
 
-// Render with strict mode but WITHOUT Router (since App.jsx already has one)
-root.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+// Render without StrictMode to prevent double renders
+root.render(<App />);
 
 // Register service worker with better error handling
+/* Temporarily disabled to troubleshoot refresh issues
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/serviceWorker.js', {
@@ -73,3 +70,4 @@ if ('serviceWorker' in navigator) {
 } else {
   console.log('Service workers are not supported in this browser');
 }
+*/

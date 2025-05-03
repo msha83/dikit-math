@@ -49,8 +49,20 @@ self.addEventListener('activate', (event) => {
 
 // Network-first strategy with cache fallback
 self.addEventListener('fetch', (event) => {
+  // Skip non-GET requests
+  if (event.request.method !== 'GET') {
+    return;
+  }
+  
   // Only handle same-origin requests to avoid CORS issues
   if (!event.request.url.startsWith(self.location.origin)) {
+    return;
+  }
+  
+  // Skip API requests to prevent caching dynamic data
+  if (event.request.url.includes('/api/') || 
+      event.request.url.includes('supabase') || 
+      event.request.url.includes('rest')) {
     return;
   }
 
@@ -59,6 +71,12 @@ self.addEventListener('fetch', (event) => {
       .then(response => {
         // Don't cache responses that aren't successful
         if (!response || response.status !== 200) {
+          return response;
+        }
+
+        // Don't cache if the response has a no-cache header
+        const cacheControl = response.headers.get('Cache-Control');
+        if (cacheControl && (cacheControl.includes('no-cache') || cacheControl.includes('no-store'))) {
           return response;
         }
 

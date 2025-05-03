@@ -1,43 +1,150 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { supabase } from '../config/supabase';
+
+const LoadingSkeleton = () => (
+  <div className="py-12 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div className="animate-pulse">
+      <div className="h-8 w-48 bg-gray-200 rounded mb-6"></div>
+      
+      {/* Status cards skeleton */}
+      <div className="bg-white shadow-md rounded-lg p-6 mb-8">
+        <div className="h-6 w-32 bg-gray-200 rounded mb-4"></div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="bg-gray-50 p-4 rounded-lg">
+              <div className="h-4 w-24 bg-gray-200 rounded mb-2"></div>
+              <div className="h-6 w-12 bg-gray-200 rounded"></div>
+            </div>
+          ))}
+        </div>
+      </div>
+      
+      {/* Topics skeleton */}
+      {[1, 2].map((category) => (
+        <div key={category} className="mb-10">
+          <div className="h-6 w-32 bg-gray-200 rounded mb-4"></div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[1, 2, 3].map((topic) => (
+              <div key={topic} className="bg-white rounded-lg shadow-md p-6">
+                <div className="h-5 w-3/4 bg-gray-200 rounded mb-4"></div>
+                <div className="flex justify-between items-center mb-4">
+                  <div className="h-4 w-16 bg-gray-200 rounded"></div>
+                  <div className="h-4 w-12 bg-gray-200 rounded"></div>
+                </div>
+                <div className="h-10 w-full bg-gray-200 rounded"></div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+);
 
 const Soal = () => {
-  console.log("Soal page rendered");
-  const [categories, setCategories] = useState([
-    {
-      id: 1,
-      title: 'Aljabar',
-      topics: [
-        { id: 1, name: 'Persamaan Linear', slug: 'persamaan-linear', questionCount: 10, difficulty: 'Sedang' },
-        { id: 2, name: 'Persamaan Kuadrat', slug: 'persamaan-kuadrat', questionCount: 8, difficulty: 'Sulit' },
-        { id: 3, name: 'Fungsi dan Grafik', slug: 'fungsi-dan-grafik', questionCount: 12, difficulty: 'Sedang' }
-      ]
-    },
-    {
-      id: 2,
-      title: 'Geometri',
-      topics: [
-        { id: 4, name: 'Bangun Datar', slug: 'bangun-datar', questionCount: 10, difficulty: 'Mudah' },
-        { id: 5, name: 'Bangun Ruang', slug: 'bangun-ruang', questionCount: 8, difficulty: 'Sedang' },
-        { id: 6, name: 'Trigonometri', slug: 'trigonometri', questionCount: 15, difficulty: 'Sulit' }
-      ]
-    },
-    {
-      id: 3,
-      title: 'Statistika',
-      topics: [
-        { id: 7, name: 'Pengolahan Data', slug: 'pengolahan-data', questionCount: 8, difficulty: 'Mudah' },
-        { id: 8, name: 'Peluang', slug: 'peluang', questionCount: 10, difficulty: 'Sedang' }
-      ]
-    }
-  ]);
-  
-  // Status progress belajar dummy data
+  const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [progress, setProgress] = useState({
-    completed: 5,
-    inProgress: 3,
-    total: 12
+    completed: 0,
+    inProgress: 0,
+    total: 0
   });
+
+  useEffect(() => {
+    fetchQuizCategories();
+    fetchUserProgress();
+  }, []);
+
+  const fetchQuizCategories = async () => {
+    try {
+      setLoading(true);
+      
+      // Fetch categories and their quizzes
+      const { data: categoriesData, error: categoriesError } = await supabase
+        .from('quiz_categories')
+        .select(`
+          id,
+          name,
+          quizzes (
+            id,
+            title,
+            question_count,
+            is_published,
+            questions
+          )
+        `)
+        .order('name');
+
+      if (categoriesError) throw categoriesError;
+
+      // Transform the data to match the component's structure
+      const transformedCategories = categoriesData
+        .map(category => ({
+          id: category.id,
+          title: category.name,
+          topics: category.quizzes
+            .filter(quiz => quiz.is_published && quiz.questions && quiz.questions.length > 0)
+            .map(quiz => ({
+              id: quiz.id,
+              name: quiz.title,
+              slug: quiz.title.toLowerCase().replace(/ /g, '-'),
+              questionCount: quiz.questions.length,
+              difficulty: 'Sedang' // You might want to add a difficulty field to your quiz table
+            }))
+        }))
+        .filter(category => category.topics.length > 0); // Only include categories that have quizzes with questions
+
+      setCategories(transformedCategories);
+    } catch (error) {
+      console.error('Error fetching quiz categories:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchUserProgress = async () => {
+    try {
+      // Get the current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Fetch all quizzes to get total count
+      const { data: allQuizzes } = await supabase
+        .from('quizzes')
+        .select('id')
+        .eq('is_published', true);
+
+      // Fetch user's completed quizzes
+      const { data: completedQuizzes } = await supabase
+        .from('user_quiz_progress')
+        .select('quiz_id, status')
+        .eq('user_id', user.id)
+        .eq('status', 'completed');
+
+      // Fetch user's in-progress quizzes
+      const { data: inProgressQuizzes } = await supabase
+        .from('user_quiz_progress')
+        .select('quiz_id, status')
+        .eq('user_id', user.id)
+        .eq('status', 'in_progress');
+
+      setProgress({
+        total: allQuizzes?.length || 0,
+        completed: completedQuizzes?.length || 0,
+        inProgress: inProgressQuizzes?.length || 0
+      });
+
+    } catch (error) {
+      console.error('Error fetching user progress:', error);
+      // Set default values if there's an error
+      setProgress({
+        total: 0,
+        completed: 0,
+        inProgress: 0
+      });
+    }
+  };
 
   const getDifficultyColor = (difficulty) => {
     switch(difficulty) {
@@ -47,6 +154,29 @@ const Soal = () => {
       default: return 'bg-gray-100 text-gray-800';
     }
   };
+
+  if (loading) {
+    return <LoadingSkeleton />;
+  }
+
+  if (categories.length === 0) {
+    return (
+      <div className="py-12 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="text-center py-12 bg-white rounded-lg shadow-md">
+          <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          <h3 className="mt-2 text-lg font-medium text-gray-900">Belum Ada Latihan Soal</h3>
+          <p className="mt-1 text-sm text-gray-500">Latihan soal sedang dalam proses pembuatan. Silakan cek kembali nanti.</p>
+          <div className="mt-6">
+            <Link to="/" className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700">
+              Kembali ke Beranda
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="py-12 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -75,12 +205,16 @@ const Soal = () => {
         <div className="mt-6">
           <div className="flex justify-between mb-2">
             <span className="text-sm text-gray-700">Progress</span>
-            <span className="text-sm font-semibold text-gray-700">{Math.round((progress.completed / progress.total) * 100)}%</span>
+            <span className="text-sm font-semibold text-gray-700">
+              {progress.total > 0 ? Math.round((progress.completed / progress.total) * 100) : 0}%
+            </span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-2.5">
             <div 
-              className="bg-blue-600 h-2.5 rounded-full" 
-              style={{ width: `${(progress.completed / progress.total) * 100}%` }}
+              className="bg-blue-600 h-2.5 rounded-full transition-all duration-300" 
+              style={{ 
+                width: `${progress.total > 0 ? (progress.completed / progress.total) * 100 : 0}%` 
+              }}
             ></div>
           </div>
         </div>

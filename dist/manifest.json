@@ -1,6 +1,6 @@
 {
   "short_name": "Math App",
-  "name": "DiKit Math Learning",
+  "name": "MathMax Math Learning",
   "description": "Interactive math learning platform with personalized lessons and exercises",
   "start_url": "/",
   "display": "standalone",
@@ -47,7 +47,7 @@
       "sizes": "750x1334",
       "type": "image/png",
       "platform": "narrow",
-      "label": "MathEdu di Smartphone"
+      "label": "MathMax di Smartphone"
     }
   ],
   "categories": ["education", "mathematics", "learning"]

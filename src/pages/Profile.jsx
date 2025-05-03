@@ -75,33 +75,43 @@ const Profile = () => {
   }, [navigate]);
 
   const fetchUserStats = (userId) => {
-    // Simulated API call to get user stats
-    setTimeout(() => {
-      // For demo, we'll use random data
-      const mockStats = {
-        completedTopics: Math.floor(Math.random() * 15) + 5,
-        totalTopics: 30,
-        completedExercises: Math.floor(Math.random() * 50) + 20,
-        totalExercises: 100,
-        totalXP: Math.floor(Math.random() * 1000) + 500,
-        dailyStreak: Math.floor(Math.random() * 10) + 1,
+    // Get actual user progress from localStorage instead of random mock data
+    try {
+      // Get userProgress from localStorage
+      const userProgress = JSON.parse(localStorage.getItem('userProgress') || '{}');
+      
+      const stats = {
+        completedTopics: userProgress.completedTopics?.length || 0,
+        totalTopics: 30, // This could be fetched from an API in production
+        completedExercises: userProgress.completedExercises?.length || 0,
+        totalExercises: 100, // This could be fetched from an API in production
+        totalXP: userProgress.xpPoints || 0,
+        dailyStreak: userProgress.streak || 0,
         rank: 'Bintang',
         nextRank: 'Juara',
-        xpToNextRank: Math.floor(Math.random() * 200) + 50,
-        topicsCompleted: [
-          { id: 1, name: 'Persamaan Linear', date: '2023-10-15', xpEarned: 50 },
-          { id: 2, name: 'Fungsi Kuadrat', date: '2023-10-10', xpEarned: 75 },
-          { id: 3, name: 'Trigonometri Dasar', date: '2023-10-05', xpEarned: 60 }
-        ],
-        recentActivities: [
-          { id: 1, type: 'quiz', name: 'Latihan Soal Persamaan Linear', date: '2023-10-20', result: '8/10' },
-          { id: 2, type: 'flashcard', name: 'Flashcard Logaritma', date: '2023-10-18', result: 'Selesai' },
-          { id: 3, type: 'material', name: 'Belajar Materi Statistika', date: '2023-10-15', result: 'Selesai' }
-        ]
+        xpToNextRank: 100, // Calculate based on current XP in a real implementation
+        topicsCompleted: userProgress.completedTopics || [],
+        recentActivities: userProgress.activities || []
       };
       
-      setStats(mockStats);
-    }, 800);
+      setStats(stats);
+    } catch (error) {
+      console.error('Error fetching user stats:', error);
+      // Set default values if there's an error
+      setStats({
+        completedTopics: 0,
+        totalTopics: 30,
+        completedExercises: 0,
+        totalExercises: 100,
+        totalXP: 0,
+        dailyStreak: 0,
+        rank: 'Pemula',
+        nextRank: 'Bintang',
+        xpToNextRank: 100,
+        topicsCompleted: [],
+        recentActivities: []
+      });
+    }
   };
 
   const handleInputChange = (e) => {

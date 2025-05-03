@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 
 /**
@@ -18,10 +18,11 @@ const PageTransition = ({
   const location = useLocation();
   const [displayLocation, setDisplayLocation] = useState(location);
   const [transitionStage, setTransitionStage] = useState('fadeIn');
+  const timeoutRef = useRef(null);
 
   // Generate animation classes based on type
   const getTransitionClasses = () => {
-    const baseClass = 'transition-all duration-300 will-change-transform will-change-opacity';
+    const baseClass = 'transition-all will-change-transform will-change-opacity';
     
     switch (transitionType) {
       case 'slide':
@@ -51,15 +52,25 @@ const PageTransition = ({
     if (location.pathname !== displayLocation.pathname) {
       setTransitionStage('fadeOut');
       
+      // Avoid memory leaks by clearing any existing timeout
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+      
       // After transition time, update location and animate entrance
-      const timeout = setTimeout(() => {
+      timeoutRef.current = setTimeout(() => {
         setDisplayLocation(location);
         setTransitionStage('fadeIn');
       }, duration);
-      
-      return () => clearTimeout(timeout);
     }
-  }, [location, displayLocation, duration]);
+    
+    // Cleanup on unmount
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, [location, displayLocation.pathname, duration]);
 
   // Apply style based on custom duration
   const transitionStyle = {
@@ -76,4 +87,4 @@ const PageTransition = ({
   );
 };
 
-export default PageTransition;
+export default React.memo(PageTransition);

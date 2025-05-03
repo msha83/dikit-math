@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Make Admin Tool</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    .container {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 20px;
+      margin-top: 30px;
+    }
+    h1 {
+      color: #333;
+    }
+    input {
+      width: 100%;
+      padding: 8px;
+      margin: 8px 0;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    button {
+      background-color: #4CAF50;
+      color: white;
+      padding: 10px 15px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+    #result {
+      margin-top: 20px;
+      padding: 10px;
+      border-radius: 4px;
+    }
+    .success {
+      background-color: #d4edda;
+      color: #155724;
+    }
+    .error {
+      background-color: #f8d7da;
+      color: #721c24;
+    }
+  </style>
+</head>
+<body>
+  <h1>DiKit Admin Tool</h1>
+  <div class="container">
+    <h2>Make User Admin</h2>
+    <div>
+      <label for="supabaseUrl">Supabase URL:</label>
+      <input type="text" id="supabaseUrl" placeholder="Your Supabase URL">
+    </div>
+    <div>
+      <label for="supabaseKey">Supabase Key:</label>
+      <input type="text" id="supabaseKey" placeholder="Your Supabase Key">
+    </div>
+    <div>
+      <label for="userEmail">User Email:</label>
+      <input type="email" id="userEmail" value="pashaalmadani@gmail.com" placeholder="Email of user to make admin">
+    </div>
+    <button id="makeAdmin">Make Admin</button>
+    <div id="result"></div>
+  </div>
+
+  <script>
+    document.getElementById('makeAdmin').addEventListener('click', async function() {
+      const resultDiv = document.getElementById('result');
+      resultDiv.className = '';
+      resultDiv.textContent = 'Processing...';
+
+      const supabaseUrl = document.getElementById('supabaseUrl').value;
+      const supabaseKey = document.getElementById('supabaseKey').value;
+      const userEmail = document.getElementById('userEmail').value;
+
+      if (!supabaseUrl || !supabaseKey || !userEmail) {
+        resultDiv.className = 'error';
+        resultDiv.textContent = 'Please fill in all fields';
+        return;
+      }
+
+      try {
+        // Create Supabase client using the global supabase object from CDN
+        const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+        // First, find the user by email
+        const { data: userData, error: userError } = await supabaseClient
+          .from('profiles')
+          .select('id')
+          .eq('email', userEmail)
+          .single();
+        
+        if (userError) {
+          resultDiv.className = 'error';
+          resultDiv.textContent = `Error finding user: ${userError.message}`;
+          return;
+        }
+        
+        if (!userData) {
+          resultDiv.className = 'error';
+          resultDiv.textContent = `User not found with email: ${userEmail}`;
+          return;
+        }
+        
+        const userId = userData.id;
+        
+        // Check if user already has a role
+        const { data: existingRole, error: roleCheckError } = await supabaseClient
+          .from('user_roles')
+          .select('role')
+          .eq('id', userId)
+          .single();
+        
+        if (!roleCheckError && existingRole) {
+          // Update existing role to admin
+          const { error: updateError } = await supabaseClient
+            .from('user_roles')
+            .update({ role: 'admin' })
+            .eq('id', userId);
+          
+          if (updateError) {
+            resultDiv.className = 'error';
+            resultDiv.textContent = `Error updating role: ${updateError.message}`;
+            return;
+          }
+          
+          resultDiv.className = 'success';
+          resultDiv.textContent = `Updated user ${userEmail} to admin role`;
+        } else {
+          // Insert new admin role
+          const { error: insertError } = await supabaseClient
+            .from('user_roles')
+            .insert({ id: userId, role: 'admin' });
+          
+          if (insertError) {
+            resultDiv.className = 'error';
+            resultDiv.textContent = `Error inserting role: ${insertError.message}`;
+            return;
+          }
+          
+          resultDiv.className = 'success';
+          resultDiv.textContent = `Added admin role to user ${userEmail}`;
+        }
+      } catch (error) {
+        resultDiv.className = 'error';
+        resultDiv.textContent = `Unexpected error: ${error.message}`;
+      }
+    });
+  </script>
+</body>
+</html> 
