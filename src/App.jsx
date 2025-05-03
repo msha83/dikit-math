@@ -8,7 +8,6 @@ import PageTransition from './components/PageTransition';
 import LottieAnimation from './components/LottieAnimation';
 import { loadingAnimation } from './animations/mathAnimations';
 import ErrorBoundary from './components/ErrorBoundary';
-import ConditionalNavbar from './components/ConditionalNavbar';
 import OptimizedLoading from './components/OptimizedLoading';
 import LoadingSpinner from './components/LoadingSpinner';
 
@@ -59,6 +58,14 @@ const HomeRedirect = () => {
   return user ? <Navigate to="/dashboard" replace /> : <Navigate to="/login" replace />;
 };
 
+// Custom Navbar selector component
+const CustomNavbar = () => {
+  const location = useLocation();
+  const isAdminRoute = location.pathname.startsWith('/admin');
+  
+  return isAdminRoute ? <AdminNavbar /> : <Navbar />;
+};
+
 function App() {
   // Precarga de componentes críticos en producción
   useEffect(() => {
@@ -86,7 +93,7 @@ function App() {
   return (
     <AuthProvider>
       <Router>
-        <ConditionalNavbar />
+        <CustomNavbar />
         <div className="min-h-screen bg-gray-50 pt-20">
           <ErrorBoundary>
             <Suspense fallback={<OptimizedLoading />}>
