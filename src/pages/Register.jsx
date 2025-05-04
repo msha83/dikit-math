@@ -147,6 +147,36 @@ const Register = () => {
     } catch (error) {
       console.error('Auth Error:', error);
       
+      // Jika error adalah duplicate key untuk profiles, kita bisa anggap registrasi tetap berhasil 
+      // karena user sudah berhasil dibuat di auth.users
+      if (error.message?.includes('duplicate key') || error.code === '23505' || error.status === 409) {
+        console.log("Error duplicate key pada profiles terdeteksi, tapi akun berhasil dibuat");
+        
+        // Simpan data user di localStorage meskipun ada error profiles
+        try {
+          // Coba dapatkan user yang baru dibuat
+          const { data: userData } = await supabase.auth.getUser();
+          
+          if (userData?.user) {
+            localStorage.setItem('user', JSON.stringify({
+              id: userData.user.id,
+              email: formData.email,
+              name: formData.name
+            }));
+            
+            // Redirect ke onboarding
+            console.log("Meskipun ada error pada profiles, akun dibuat & akan diarahkan ke onboarding");
+            setFormData({ name: '', email: '', password: '', confirmPassword: '' });
+            setIsLoading(false);
+            navigate('/onboarding');
+            return; // Exit function early
+          }
+        } catch (userError) {
+          console.error("Error getting user data after profile error:", userError);
+          // Lanjut ke penanganan error biasa
+        }
+      }
+      
       let errorMessage = 'Terjadi kesalahan saat pendaftaran. Silakan coba lagi.';
       
       // Handle rate limiting errors
@@ -362,7 +392,7 @@ const Register = () => {
         </div>
       </div>
     </div>
-  );
+  );\
 };
 
 export default Register;
