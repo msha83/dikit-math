@@ -106,8 +106,9 @@ const Register = () => {
     try {
       console.log("Mencoba membuat akun dengan AuthContext...");
       
-      // Create user with AuthContext
-      const data = await signUp(formData.email, formData.password, formData.name);
+      // Create user with AuthContext, passing name as metadata
+      const metadata = { name: formData.name };
+      const data = await signUp(formData.email, formData.password, metadata);
       
       console.log("Akun berhasil dibuat:", data);
       
@@ -123,25 +124,6 @@ const Register = () => {
           nextMilestone: 200
         };
         localStorage.setItem('userProgress', JSON.stringify(initialUserProgress));
-
-        // Insert user profile into profiles table
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .insert([
-            {
-              id: data.user.id,
-              name: formData.name,
-              email: formData.email,
-              score: 0,
-              created_at: new Date().toISOString(),
-              last_updated: new Date().toISOString()
-            }
-          ]);
-
-        if (profileError) {
-          console.error('Error creating profile:', profileError);
-          throw new Error('Gagal membuat profil pengguna');
-        }
 
         // Store user data in localStorage
         console.log("Menyimpan data pengguna di localStorage...");
